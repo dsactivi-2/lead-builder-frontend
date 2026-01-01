@@ -1,144 +1,214 @@
-'use client';
+'use client'
 
-import { useReducer, useCallback } from 'react';
-import { ChatPanel } from '@/components/lead-builder/ChatPanel';
-import { OutputPanel } from '@/components/lead-builder/OutputPanel';
-import { leadBuilderReducer, initialState } from '@/store/leadBuilderReducer';
-import { api } from '@/lib/api';
-import { config } from '@/config/runtime';
-import { Template } from '@/components/lead-builder/types';
+import { useState } from 'react'
+import { ChatPanel } from '@/components/lead-builder/ChatPanel'
+import { OutputPanel } from '@/components/lead-builder/OutputPanel'
+import { SaveTemplateDialog } from '@/components/lead-builder/SaveTemplateDialog'
+import { DebugPanel } from '@/components/lead-builder/DebugPanel'
+import { useToast } from '@/components/ui/use-toast'
+import { postDraft, postMatch, postRender, postConfirm, postTemplate } from '@/lib/api'
+import type { ChatMessage, OutputTarget, ReuseMode, Artifact, MatchCandidate } from '@/components/lead-builder/types'
 
 export default function LeadBuilderPage() {
-  const [state, dispatch] = useReducer(leadBuilderReducer, initialState);
+  const { toast } = useToast()
 
-  const handleSendMessage = useCallback(async (content: string) => {
-    // Add user message
-    const userMessage = {
-      id: crypto.randomUUID(),
-      role: 'user' as const,
-      content,
-      timestamp: new Date(),
-    };
-    dispatch({ type: 'ADD_MESSAGE', payload: userMessage });
-    dispatch({ type: 'SET_STATE', payload: 'processing' });
+  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [outputTarget, setOutputTarget] = useState<OutputTarget>('lead_campaign_json')
+  const [reuseMode, setReuseMode] = useState<ReuseMode>('auto')
 
-    try {
-      // Call API
-      dispatch({ type: 'SET_STATE', payload: 'understanding' });
+  const [artifact, setArtifact] = useState<Artifact | null>(null)
+  const [matchCandidates, setMatchCandidates] = useState<MatchCandidate[]>([])
 
-      const response = await api.leadBuilder.process({
-        userInput: content,
-        workspaceId: config.workspaceId,
-        userId: config.userId,
-      });
+  const [isLoadingChat, setIsLoadingChat] = useState(false)
+  const [isLoadingArtifact, setIsLoadingArtifact] = useState(false)
+  const [artifactError, setArtifactError] = useState<string | null>(null)
 
-      dispatch({ type: 'SET_DEBUG_DATA', payload: response });
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false)
+  const [saveDialogLoading, setSaveDialogLoading] = useState(false)
+  const [saveDialogError, setSaveDialogError] = useState<string | undefined>(undefined)
 
-      // Update understanding
-      dispatch({ type: 'SET_UNDERSTANDING', payload: response.understanding });
-      dispatch({ type: 'SET_STATE', payload: 'matching' });
+  function addAssistantUnderstanding(understanding: any, draftId: string) {
+    setMessages((prev) => [...prev, { role: 'assistant', understanding, draftId }])
+  }
 
-      // Update matches
-      dispatch({
-        type: 'SET_MATCHES',
-        payload: {
-          count: response.matches.count,
-          matches: response.matches.preview,
-        },
-      });
+  async function onSendMessage(text: string) {
+    const input = text.trim()
+    if (!input) return
 
-      // Update artifacts
-      dispatch({ type: 'SET_ARTIFACTS', payload: response.artifacts });
+    setArtifactError(null)
+    setIsLoadingChat(true)
 
-      // Add assistant response
-      const assistantMessage = {
-        id: crypto.randomUUID(),
-        role: 'assistant' as const,
-        content: `Ich habe ${response.matches.count} passende Leads gefunden basierend auf: ${response.understanding.intent}`,
-        timestamp: new Date(),
-      };
-      dispatch({ type: 'ADD_MESSAGE', payload: assistantMessage });
-
-      dispatch({ type: 'SET_STATE', payload: 'complete' });
-    } catch (error) {
-      dispatch({
-        type: 'SET_ERROR',
-        payload: error instanceof Error ? error.message : 'Ein Fehler ist aufgetreten',
-      });
-
-      const errorMessage = {
-        id: crypto.randomUUID(),
-        role: 'assistant' as const,
-        content: 'Entschuldigung, es ist ein Fehler aufgetreten. Bitte versuche es erneut.',
-        timestamp: new Date(),
-      };
-      dispatch({ type: 'ADD_MESSAGE', payload: errorMessage });
-    }
-  }, []);
-
-  const handleSaveTemplate = useCallback(async (name: string) => {
-    if (!state.artifacts) return;
+    setMessages((prev) => [...prev, { role: 'user', text: input }])
 
     try {
-      const result = await api.leadBuilder.saveTemplate({
-        name,
-        query: state.artifacts.query,
-      });
+      // 1) Draft
+      const draftRes = await postDraft({ input_text: input, output_target: outputTarget, reuse_mode: reuseMode })
+      addAssistantUnderstanding(draftRes.understanding, draftRes.draft_id)
 
-      const newTemplate: Template = {
-        id: result.id,
-        name,
-        query: state.artifacts.query,
-        createdAt: new Date(),
-      };
+      // 2) Match (non-blocking)
+      try {
+        const matchRes = await postMatch({
+          input_text: input,
+          types: ['lead_campaign_json', 'lead_job_json', 'call_prompt', 'enrichment_prompt'],
+          top_k: 5,
+        })
 
-      dispatch({ type: 'ADD_TEMPLATE', payload: newTemplate });
-    } catch (error) {
-      console.error('Failed to save template:', error);
+        // Hash hit => auto render unless alwaysNew
+        if (matchRes.hash_hit && reuseMode !== 'alwaysNew') {
+          setIsLoadingArtifact(true)
+          try {
+            const renderRes = await postRender({
+              template_id: matchRes.hash_hit.template_id,
+              parameters: {},
+              output_target: outputTarget,
+            })
+            setArtifact({ type: outputTarget, content: renderRes.content })
+            setMatchCandidates([])
+          } catch (e: any) {
+            setArtifactError(e?.message || 'Render failed')
+          } finally {
+            setIsLoadingArtifact(false)
+          }
+        } else {
+          setMatchCandidates(matchRes.candidates || [])
+        }
+      } catch {
+        setMatchCandidates([])
+      }
+    } catch (e: any) {
+      toast({
+        title: 'Draft failed',
+        description: e?.message || 'Unknown error',
+        variant: 'destructive',
+      })
+      setMessages((prev) => [...prev, { role: 'assistant', text: `Error: ${e?.message || 'Draft failed'}` }])
+    } finally {
+      setIsLoadingChat(false)
     }
-  }, [state.artifacts]);
+  }
 
-  const handleLoadTemplate = useCallback((template: Template) => {
-    handleSendMessage(template.query);
-  }, [handleSendMessage]);
+  async function onConfirm(draftId: string, edits?: string) {
+    setArtifactError(null)
+    setIsLoadingArtifact(true)
+
+    try {
+      const res = await postConfirm({ draft_id: draftId, output_target: outputTarget, edits_text: edits || '' })
+      setArtifact({ type: res.artifact.type, content: res.artifact.content })
+      toast({ title: 'Artifact created' })
+    } catch (e: any) {
+      setArtifactError(e?.message || 'Confirm failed')
+      toast({ title: 'Confirm failed', description: e?.message || 'Unknown error', variant: 'destructive' })
+    } finally {
+      setIsLoadingArtifact(false)
+    }
+  }
+
+  function onReject(_draftId: string) {
+    setArtifact(null)
+    setMatchCandidates([])
+    toast({ title: 'Draft rejected', description: 'You can send a new message.' })
+  }
+
+  async function onUseTemplate(templateId: string, type?: OutputTarget) {
+    setArtifactError(null)
+    setIsLoadingArtifact(true)
+
+    try {
+      const target = type ?? outputTarget
+      const renderRes = await postRender({ template_id: templateId, parameters: {}, output_target: target })
+      setArtifact({ type: target, content: renderRes.content })
+      toast({ title: 'Template applied' })
+    } catch (e: any) {
+      setArtifactError(e?.message || 'Render failed')
+    } finally {
+      setIsLoadingArtifact(false)
+    }
+  }
+
+  function onCreateNew() {
+    setArtifact(null)
+    setMatchCandidates([])
+    toast({ title: 'Create new', description: 'Use Confirm to generate a fresh artifact.' })
+  }
+
+  function onSaveTemplateOpen() {
+    if (!artifact) {
+      toast({ title: 'No artifact', description: 'Generate an artifact first.', variant: 'destructive' })
+      return
+    }
+    setSaveDialogError(undefined)
+    setSaveDialogOpen(true)
+  }
+
+  async function onSaveTemplate(payload: { title: string; tags: string[] }) {
+    if (!artifact) return
+
+    setSaveDialogLoading(true)
+    setSaveDialogError(undefined)
+
+    try {
+      await postTemplate({
+        type: artifact.type,
+        title: payload.title,
+        tags: payload.tags,
+        content: artifact.content,
+      })
+      setSaveDialogOpen(false)
+      toast({ title: 'Template saved' })
+    } catch (e: any) {
+      setSaveDialogError(e?.message || 'Failed to save template')
+    } finally {
+      setSaveDialogLoading(false)
+    }
+  }
 
   return (
-    <div
-      className="h-screen flex flex-col"
-      data-testid="lead-builder-page"
-    >
-      <header className="border-b px-6 py-4">
-        <h1 className="text-2xl font-bold" data-testid="lead-builder-title">
-          Lead Builder
-        </h1>
-        <p className="text-muted-foreground">
-          Beschreibe deine idealen Leads und lass AI die passenden finden
-        </p>
-      </header>
-
-      <main className="flex-1 flex gap-4 p-4 overflow-hidden">
-        <div className="w-1/2">
-          <ChatPanel
-            messages={state.messages}
-            onSendMessage={handleSendMessage}
-            isProcessing={state.state === 'processing' || state.state === 'understanding' || state.state === 'matching'}
-          />
+    <div className="min-h-screen p-4 md:p-6">
+      <div className="mx-auto max-w-7xl grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+        <div>
+          <ChatPanel messages={messages} isLoading={isLoadingChat} onSendMessage={onSendMessage} onConfirm={onConfirm} onReject={onReject} />
         </div>
 
-        <div className="w-1/2">
+        <div>
           <OutputPanel
-            understanding={state.understanding}
-            matchCount={state.matchCount}
-            matches={state.matches}
-            artifacts={state.artifacts}
-            templates={state.templates}
-            state={state.state}
-            debugData={state.debugData}
-            onSaveTemplate={handleSaveTemplate}
-            onLoadTemplate={handleLoadTemplate}
+            outputTarget={outputTarget}
+            reuseMode={reuseMode}
+            onOutputTargetChange={setOutputTarget}
+            onReuseModeChange={setReuseMode}
+            artifact={artifact}
+            isLoadingArtifact={isLoadingArtifact}
+            artifactError={artifactError}
+            matchCandidates={matchCandidates}
+            onUseTemplate={onUseTemplate}
+            onCreateNew={onCreateNew}
+            onSaveTemplate={onSaveTemplateOpen}
           />
+
+          <div className="mt-4">
+            <DebugPanel
+              messages={messages}
+              outputTarget={outputTarget}
+              reuseMode={reuseMode}
+              artifact={artifact}
+              matchCandidates={matchCandidates}
+              isLoadingChat={isLoadingChat}
+              isLoadingArtifact={isLoadingArtifact}
+              artifactError={artifactError}
+            />
+          </div>
         </div>
-      </main>
+      </div>
+
+      <SaveTemplateDialog
+        open={saveDialogOpen}
+        onOpenChange={(o) => {
+          setSaveDialogOpen(o)
+          if (!o) setSaveDialogError(undefined)
+        }}
+        onSave={onSaveTemplate}
+        loading={saveDialogLoading}
+        error={saveDialogError}
+      />
     </div>
-  );
+  )
 }

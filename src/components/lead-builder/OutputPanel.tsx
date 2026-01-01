@@ -1,87 +1,100 @@
-'use client';
+'use client'
 
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { UnderstandingCard } from './UnderstandingCard';
-import { MatchBanner } from './MatchBanner';
-import { ArtifactViewer } from './ArtifactViewer';
-import { TemplatesTab } from './TemplatesTab';
-import { DebugPanel } from './DebugPanel';
-import { Understanding, Match, Artifacts, Template, LeadBuilderState } from './types';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Label } from '@/components/ui/label'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { ArtifactViewer } from './ArtifactViewer'
+import { TemplatesTab } from './TemplatesTab'
+import { MatchBanner } from './MatchBanner'
+import type { OutputTarget, ReuseMode, Artifact, MatchCandidate } from './types'
 
 interface OutputPanelProps {
-  understanding: Understanding | null;
-  matchCount: number;
-  matches: Match[];
-  artifacts: Artifacts | null;
-  templates: Template[];
-  state: LeadBuilderState;
-  debugData: unknown;
-  onSaveTemplate: (name: string) => void;
-  onLoadTemplate: (template: Template) => void;
+  outputTarget: OutputTarget
+  reuseMode: ReuseMode
+  onOutputTargetChange: (target: OutputTarget) => void
+  onReuseModeChange: (mode: ReuseMode) => void
+  artifact: Artifact | null
+  isLoadingArtifact: boolean
+  artifactError: string | null
+  matchCandidates: MatchCandidate[]
+  onUseTemplate: (templateId: string, type?: OutputTarget) => void
+  onCreateNew: () => void
+  onSaveTemplate: () => void
 }
 
 export function OutputPanel({
-  understanding,
-  matchCount,
-  matches,
-  artifacts,
-  templates,
-  state,
-  debugData,
+  outputTarget,
+  reuseMode,
+  onOutputTargetChange,
+  onReuseModeChange,
+  artifact,
+  isLoadingArtifact,
+  artifactError,
+  matchCandidates,
+  onUseTemplate,
+  onCreateNew,
   onSaveTemplate,
-  onLoadTemplate,
 }: OutputPanelProps) {
-  const isLoading = state === 'processing' || state === 'understanding' || state === 'matching';
-
   return (
-    <div className="flex flex-col h-full border rounded-lg" data-testid="output-panel">
-      <div className="p-4 border-b">
-        <h2 className="font-semibold">Ergebnisse</h2>
+    <div className="space-y-4" data-testid="ui.output.panel">
+      <div className="space-y-2">
+        <Label>Output Type</Label>
+        <Select value={outputTarget} onValueChange={(v) => onOutputTargetChange(v as OutputTarget)}>
+          <SelectTrigger data-testid="ui.output.typeSelect">
+            <SelectValue placeholder="Select output type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="lead_campaign_json">
+              <span data-testid="ui.output.typeSelect.option.leadCampaignJson">Lead Campaign JSON</span>
+            </SelectItem>
+            <SelectItem value="lead_job_json">
+              <span data-testid="ui.output.typeSelect.option.leadJobJson">Lead Job JSON</span>
+            </SelectItem>
+            <SelectItem value="call_prompt">
+              <span data-testid="ui.output.typeSelect.option.callPrompt">Call Prompt</span>
+            </SelectItem>
+            <SelectItem value="enrichment_prompt">
+              <span data-testid="ui.output.typeSelect.option.enrichmentPrompt">Enrichment Prompt</span>
+            </SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
-      <div className="flex-1 overflow-hidden">
-        <Tabs defaultValue="results" className="h-full flex flex-col">
-          <TabsList className="mx-4 mt-4" data-testid="output-tabs">
-            <TabsTrigger value="results" data-testid="tab-results">
-              Ergebnisse
-            </TabsTrigger>
-            <TabsTrigger value="templates" data-testid="tab-templates">
-              Templates
-            </TabsTrigger>
-            <TabsTrigger value="debug" data-testid="tab-debug">
-              Debug
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="results" className="flex-1 overflow-auto p-4 space-y-4">
-            <UnderstandingCard
-              understanding={understanding}
-              isLoading={state === 'understanding'}
-            />
-            <MatchBanner
-              matchCount={matchCount}
-              matches={matches}
-              isLoading={state === 'matching'}
-            />
-            <ArtifactViewer
-              artifacts={artifacts}
-              isLoading={isLoading}
-              onSaveAsTemplate={onSaveTemplate}
-            />
-          </TabsContent>
-
-          <TabsContent value="templates" className="flex-1 overflow-auto p-4">
-            <TemplatesTab
-              templates={templates}
-              onLoadTemplate={onLoadTemplate}
-            />
-          </TabsContent>
-
-          <TabsContent value="debug" className="flex-1 overflow-auto p-4">
-            <DebugPanel data={debugData} state={state} />
-          </TabsContent>
-        </Tabs>
+      <div className="space-y-2">
+        <Label>Reuse Mode</Label>
+        <RadioGroup value={reuseMode} onValueChange={(v) => onReuseModeChange(v as ReuseMode)} data-testid="ui.output.reuseMode">
+          <div className="flex items-center space-x-2">
+            <RadioGroupItem value="auto" id="reuse-auto" data-testid="ui.output.reuseMode.auto" />
+            <Label htmlFor="reuse-auto">Auto</Label>
+          </div>
+          <div className="flex items-center space-x-2">
+            <RadioGroupItem value="libraryOnly" id="reuse-library" data-testid="ui.output.reuseMode.libraryOnly" />
+            <Label htmlFor="reuse-library">Library only</Label>
+          </div>
+          <div className="flex items-center space-x-2">
+            <RadioGroupItem value="alwaysNew" id="reuse-new" data-testid="ui.output.reuseMode.alwaysNew" />
+            <Label htmlFor="reuse-new">Always new</Label>
+          </div>
+        </RadioGroup>
       </div>
+
+      <MatchBanner candidates={matchCandidates} onUseTemplate={onUseTemplate} onCreateNew={onCreateNew} />
+
+      <Tabs defaultValue="artifact" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="artifact">Artifact</TabsTrigger>
+          <TabsTrigger value="templates">Templates</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="artifact" className="space-y-3">
+          <ArtifactViewer artifact={artifact} isLoading={isLoadingArtifact} error={artifactError} onSaveTemplate={onSaveTemplate} />
+        </TabsContent>
+
+        <TabsContent value="templates">
+          <TemplatesTab onUseTemplate={onUseTemplate} />
+        </TabsContent>
+      </Tabs>
     </div>
-  );
+  )
 }
