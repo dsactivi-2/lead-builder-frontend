@@ -3,3 +3,6 @@ export const config = {
   workspaceId: process.env.NEXT_PUBLIC_WORKSPACE_ID || 'ws_default',
   userId: process.env.NEXT_PUBLIC_USER_ID || 'u_default',
 } as const;
+
+// Alias für Kompatibilität mit neuer API
+export const RUNTIME = config;

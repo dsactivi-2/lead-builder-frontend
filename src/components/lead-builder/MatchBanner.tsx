@@ -2,71 +2,69 @@
 
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Match } from './types';
+import { Button } from '@/components/ui/button';
+import type { MatchCandidate, OutputTarget } from './types';
 
 interface MatchBannerProps {
-  matchCount: number;
-  matches: Match[];
-  isLoading: boolean;
+  candidates: MatchCandidate[];
+  onUseTemplate: (templateId: string, type?: OutputTarget) => void;
+  onCreateNew: () => void;
 }
 
-export function MatchBanner({ matchCount, matches, isLoading }: MatchBannerProps) {
-  return (
-    <Card data-testid="match-banner">
-      <CardContent className="py-4">
-        {isLoading ? (
-          <div
-            className="animate-pulse flex items-center gap-4"
-            data-testid="match-loading"
-          >
-            <div className="h-8 w-24 bg-muted rounded" />
-            <div className="h-4 w-48 bg-muted rounded" />
-          </div>
-        ) : matchCount > 0 ? (
-          <div className="space-y-3" data-testid="match-content">
-            <div className="flex items-center gap-3">
-              <Badge
-                variant="default"
-                className="text-lg px-3 py-1"
-                data-testid="match-count"
-              >
-                {matchCount} Matches
-              </Badge>
-              <span className="text-muted-foreground">
-                gefunden basierend auf deinen Kriterien
-              </span>
-            </div>
+export function MatchBanner({ candidates, onUseTemplate, onCreateNew }: MatchBannerProps) {
+  if (candidates.length === 0) {
+    return null;
+  }
 
-            {matches.length > 0 && (
-              <div className="flex flex-wrap gap-2" data-testid="match-preview">
-                {matches.slice(0, 5).map((match) => (
-                  <div
-                    key={match.id}
-                    className="flex items-center gap-2 bg-muted rounded-full px-3 py-1"
-                    data-testid={`match-item-${match.id}`}
-                  >
-                    <span className="text-sm">{match.name}</span>
-                    <Badge variant="outline" className="text-xs">
-                      {Math.round(match.score * 100)}%
-                    </Badge>
-                  </div>
-                ))}
-                {matches.length > 5 && (
-                  <span className="text-muted-foreground text-sm self-center">
-                    +{matches.length - 5} weitere
-                  </span>
-                )}
+  return (
+    <Card data-testid="match-banner" className="border-blue-200 bg-blue-50/50">
+      <CardContent className="py-4">
+        <div className="space-y-3" data-testid="match-content">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Badge variant="secondary" className="text-sm px-3 py-1" data-testid="match-count">
+                {candidates.length} Similar Template{candidates.length > 1 ? 's' : ''}
+              </Badge>
+              <span className="text-muted-foreground text-sm">found</span>
+            </div>
+            <Button variant="outline" size="sm" onClick={onCreateNew} data-testid="match-create-new">
+              Create New Instead
+            </Button>
+          </div>
+
+          <div className="space-y-2" data-testid="match-preview">
+            {candidates.slice(0, 3).map((candidate) => (
+              <div
+                key={candidate.template_id}
+                className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border"
+                data-testid={`match-item-${candidate.template_id}`}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">{candidate.title}</span>
+                  <Badge variant="outline" className="text-xs">
+                    {candidate.type.replace('_', ' ')}
+                  </Badge>
+                  <Badge variant="secondary" className="text-xs">
+                    {Math.round(candidate.score * 100)}% match
+                  </Badge>
+                </div>
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={() => onUseTemplate(candidate.template_id, candidate.type)}
+                  data-testid={`match-use-${candidate.template_id}`}
+                >
+                  Use This
+                </Button>
               </div>
+            ))}
+            {candidates.length > 3 && (
+              <span className="text-muted-foreground text-sm">
+                +{candidates.length - 3} more
+              </span>
             )}
           </div>
-        ) : (
-          <p
-            className="text-muted-foreground"
-            data-testid="match-empty"
-          >
-            Noch keine Matches - definiere Lead-Kriterien im Chat
-          </p>
-        )}
+        </div>
       </CardContent>
     </Card>
   );
