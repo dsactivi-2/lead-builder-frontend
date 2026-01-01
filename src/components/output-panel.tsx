@@ -23,11 +23,38 @@ interface OutputPanelProps {
   onSaveTemplate: () => void
 }
 
-const OUTPUT_TARGET_LABELS: Record<OutputTarget, string> = {
-  lead_campaign_json: "Lead Campaign (JSON)",
-  lead_job_json: "Lead Job (JSON)",
-  call_prompt: "Call Prompt",
-  enrichment_prompt: "Enrichment Prompt",
+const OUTPUT_TARGET_INFO: Record<OutputTarget, { label: string; description: string }> = {
+  lead_campaign_json: {
+    label: "Lead Campaign (JSON)",
+    description: "Strukturierte Suchkampagne für Kandidaten-Leads mit Filtern und Parametern",
+  },
+  lead_job_json: {
+    label: "Lead Job (JSON)",
+    description: "Stellenausschreibung als strukturiertes JSON für Job-Portale",
+  },
+  call_prompt: {
+    label: "Call Prompt",
+    description: "Gesprächsleitfaden für Telefon-Akquise und Erstkontakt",
+  },
+  enrichment_prompt: {
+    label: "Enrichment Prompt",
+    description: "Prompt zur Anreicherung von Kandidatendaten mit KI",
+  },
+}
+
+const REUSE_MODE_INFO: Record<ReuseMode, { label: string; description: string }> = {
+  auto: {
+    label: "Auto (Smart Detection)",
+    description: "KI entscheidet automatisch ob Template wiederverwendet wird",
+  },
+  libraryOnly: {
+    label: "Library Only",
+    description: "Nur bestehende Templates verwenden, keine neuen erstellen",
+  },
+  alwaysNew: {
+    label: "Always New",
+    description: "Immer neues Artifact erstellen, keine Templates wiederverwenden",
+  },
 }
 
 export function OutputPanel({
@@ -58,13 +85,19 @@ export function OutputPanel({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {Object.entries(OUTPUT_TARGET_LABELS).map(([value, label]) => (
+                {Object.entries(OUTPUT_TARGET_INFO).map(([value, info]) => (
                   <SelectItem key={value} value={value}>
-                    {label}
+                    <div className="flex flex-col">
+                      <span>{info.label}</span>
+                      <span className="text-xs text-muted-foreground">{info.description}</span>
+                    </div>
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            <p className="text-xs text-muted-foreground">
+              {OUTPUT_TARGET_INFO[outputTarget]?.description}
+            </p>
           </div>
 
           <div className="space-y-2">
@@ -74,23 +107,32 @@ export function OutputPanel({
               onValueChange={(v) => onReuseModeChange(v as ReuseMode)}
               data-testid="ui.output.reuseMode"
             >
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="auto" id="mode-auto" data-testid="ui.output.reuseMode.auto" />
-                <Label htmlFor="mode-auto" className="font-normal">
-                  Auto (Smart detection)
-                </Label>
+              <div className="flex items-start space-x-2">
+                <RadioGroupItem value="auto" id="mode-auto" data-testid="ui.output.reuseMode.auto" className="mt-1" />
+                <div className="flex flex-col">
+                  <Label htmlFor="mode-auto" className="font-normal">
+                    {REUSE_MODE_INFO.auto.label}
+                  </Label>
+                  <span className="text-xs text-muted-foreground">{REUSE_MODE_INFO.auto.description}</span>
+                </div>
               </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="libraryOnly" id="mode-reuse" data-testid="ui.output.reuseMode.libraryOnly" />
-                <Label htmlFor="mode-reuse" className="font-normal">
-                  Library only (Reuse existing)
-                </Label>
+              <div className="flex items-start space-x-2">
+                <RadioGroupItem value="libraryOnly" id="mode-reuse" data-testid="ui.output.reuseMode.libraryOnly" className="mt-1" />
+                <div className="flex flex-col">
+                  <Label htmlFor="mode-reuse" className="font-normal">
+                    {REUSE_MODE_INFO.libraryOnly.label}
+                  </Label>
+                  <span className="text-xs text-muted-foreground">{REUSE_MODE_INFO.libraryOnly.description}</span>
+                </div>
               </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="alwaysNew" id="mode-new" data-testid="ui.output.reuseMode.alwaysNew" />
-                <Label htmlFor="mode-new" className="font-normal">
-                  Always new (Never reuse)
-                </Label>
+              <div className="flex items-start space-x-2">
+                <RadioGroupItem value="alwaysNew" id="mode-new" data-testid="ui.output.reuseMode.alwaysNew" className="mt-1" />
+                <div className="flex flex-col">
+                  <Label htmlFor="mode-new" className="font-normal">
+                    {REUSE_MODE_INFO.alwaysNew.label}
+                  </Label>
+                  <span className="text-xs text-muted-foreground">{REUSE_MODE_INFO.alwaysNew.description}</span>
+                </div>
               </div>
             </RadioGroup>
           </div>
