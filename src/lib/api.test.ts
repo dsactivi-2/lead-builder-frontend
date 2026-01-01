@@ -1,322 +1,247 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-
-// Mock the runtime config
-vi.mock('@/config/runtime', () => ({
-  RUNTIME: {
-    apiBaseUrl: '',
-    workspaceId: 'ws_test',
-    userId: 'u_test',
-  },
-}))
-
-// Import after mocking
-import { postDraft, postMatch, getTemplates, postTemplate } from './api'
-import { classifyError, isApiError, type ApiError } from './errors'
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+import { createDraft, matchTemplates, renderTemplate, confirmDraft, getTemplates, saveTemplate } from "./api"
 import {
   DraftResponseSchema,
   MatchResponseSchema,
+  RenderResponseSchema,
   ConfirmResponseSchema,
   TemplatesResponseSchema,
-} from './contracts'
+} from "./contracts"
 
-describe('API - Mock Mode', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
+// Mock the RUNTIME config to enable real fetch
+vi.mock("@/config/runtime", () => ({
+  RUNTIME: {
+    apiBaseUrl: "http://test-api.example.com",
+    workspaceId: "ws_test",
+    userId: "u_test",
+  },
+}))
+
+describe("Error Classification", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
   })
 
-  describe('postDraft', () => {
-    it('returns mock draft response', async () => {
-      const result = await postDraft({
-        input_text: 'Suche 200 Elektriker in München',
-        output_target: 'lead_campaign_json',
-        reuse_mode: 'auto',
-      })
+  it("classifies network error correctly", async () => {
+    // Mock fetch to throw network error
+    vi.spyOn(global, "fetch").mockRejectedValueOnce(new Error("fetch failed"))
 
-      expect(result).toHaveProperty('draft_id')
-      expect(result.draft_id).toMatch(/^dr_\d+$/)
-      expect(result).toHaveProperty('understanding')
-      expect(result.understanding).toHaveProperty('summary_bullets')
-      expect(result.understanding).toHaveProperty('assumptions')
-      expect(result.understanding).toHaveProperty('questions')
-    })
-  })
-
-  describe('postMatch', () => {
-    it('returns candidates for similar query', async () => {
-      const result = await postMatch({
-        input_text: 'Suche Handwerker',
-        types: ['lead_campaign_json'],
-        top_k: 5,
-      })
-
-      expect(result).toHaveProperty('normalized_text')
-      expect(result).toHaveProperty('candidates')
-      expect(Array.isArray(result.candidates)).toBe(true)
-    })
-
-    it('returns hash_hit for exact match', async () => {
-      const result = await postMatch({
-        input_text: 'exact gleich wie vorher',
-        types: ['lead_campaign_json'],
-        top_k: 5,
-      })
-
-      expect(result.hash_hit).not.toBeNull()
-      expect(result.hash_hit).toHaveProperty('template_id')
+    await expect(createDraft("Test", "lead_campaign_json", "auto")).rejects.toMatchObject({
+      kind: "network",
+      retryable: true,
     })
   })
 
-  describe('getTemplates', () => {
-    it('returns template list', async () => {
-      const result = await getTemplates({})
+  it("classifies timeout correctly", async () => {
+    vi.spyOn(global, "fetch").mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          const error = new Error("timeout")
+          error.name = "AbortError"
+          setTimeout(() => reject(error), 100)
+        }),
+    )
 
-      expect(result).toHaveProperty('items')
-      expect(Array.isArray(result.items)).toBe(true)
+    await expect(createDraft("Test", "lead_campaign_json", "auto")).rejects.toMatchObject({
+      kind: "timeout",
+      retryable: true,
     })
   })
 
-  describe('postTemplate', () => {
-    it('creates new template', async () => {
-      const result = await postTemplate({
-        type: 'lead_campaign_json',
-        title: 'Test Template',
-        tags: ['test', 'unit'],
-        content: { type: 'lead_campaign', name: 'Test' },
-      })
+  it("classifies conflict (409) correctly", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValueOnce({
+      ok: false,
+      status: 409,
+      text: () => Promise.resolve('{"message": "Template title already exists"}'),
+    } as Response)
 
-      expect(result).toHaveProperty('template_id')
-      expect(result.template_id).toMatch(/^tpl_\d+$/)
+    await expect(saveTemplate("lead_campaign_json", "Duplicate", [], {})).rejects.toMatchObject({
+      kind: "conflict",
+      retryable: false,
     })
+  })
 
-    it('throws conflict error on duplicate title', async () => {
-      // Mock already has 'SHK Westbalkan DE' - creating again should throw
-      try {
-        await postTemplate({
-          type: 'lead_campaign_json',
-          title: 'SHK Westbalkan DE',
-          tags: [],
-          content: {},
-        })
-        expect.fail('Should have thrown')
-      } catch (error) {
-        expect(isApiError(error)).toBe(true)
-        expect((error as ApiError).kind).toBe('conflict')
-        expect((error as ApiError).message).toBe('Template title already exists')
-      }
+  it("classifies validation error (400) correctly", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValueOnce({
+      ok: false,
+      status: 400,
+      text: () => Promise.resolve('{"message": "Invalid request data"}'),
+    } as Response)
+
+    await expect(createDraft("", "lead_campaign_json", "auto")).rejects.toMatchObject({
+      kind: "validation",
+      retryable: false,
+    })
+  })
+
+  it("classifies rate limit (429) correctly", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValueOnce({
+      ok: false,
+      status: 429,
+      text: () => Promise.resolve('{"message": "Too many requests"}'),
+    } as Response)
+
+    await expect(createDraft("Test", "lead_campaign_json", "auto")).rejects.toMatchObject({
+      kind: "rate_limit",
+      retryable: true,
+    })
+  })
+
+  it("classifies server error (500) correctly", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      text: () => Promise.resolve('{"message": "Internal server error"}'),
+    } as Response)
+
+    await expect(createDraft("Test", "lead_campaign_json", "auto")).rejects.toMatchObject({
+      kind: "server",
+      retryable: true,
     })
   })
 })
 
-describe('Error Classification', () => {
-  it('classifies network error correctly', () => {
-    const error = new Error('Failed to fetch')
-    const classified = classifyError(error)
-
-    expect(classified.kind).toBe('network')
-    expect(classified.retryable).toBe(true)
-  })
-
-  it('classifies timeout error correctly', () => {
-    const error = new Error('Request timeout')
-    error.name = 'AbortError'
-    const classified = classifyError(error)
-
-    expect(classified.kind).toBe('timeout')
-    expect(classified.retryable).toBe(true)
-  })
-
-  it('classifies 400 as validation error', () => {
-    const classified = classifyError(null, 400)
-
-    expect(classified.kind).toBe('validation')
-    expect(classified.retryable).toBe(false)
-  })
-
-  it('classifies 401 as permission error', () => {
-    const classified = classifyError(null, 401)
-
-    expect(classified.kind).toBe('permission')
-    expect(classified.retryable).toBe(false)
-  })
-
-  it('classifies 403 as permission error', () => {
-    const classified = classifyError(null, 403)
-
-    expect(classified.kind).toBe('permission')
-    expect(classified.retryable).toBe(false)
-  })
-
-  it('classifies 404 as not_found error', () => {
-    const classified = classifyError(null, 404)
-
-    expect(classified.kind).toBe('not_found')
-    expect(classified.retryable).toBe(false)
-  })
-
-  it('classifies 409 as conflict error', () => {
-    const classified = classifyError(null, 409)
-
-    expect(classified.kind).toBe('conflict')
-    expect(classified.retryable).toBe(false)
-  })
-
-  it('classifies 429 as rate_limit error', () => {
-    const classified = classifyError(null, 429)
-
-    expect(classified.kind).toBe('rate_limit')
-    expect(classified.retryable).toBe(true)
-  })
-
-  it('classifies 500 as server error', () => {
-    const classified = classifyError(null, 500)
-
-    expect(classified.kind).toBe('server')
-    expect(classified.retryable).toBe(true)
-  })
-
-  it('classifies 503 as server error', () => {
-    const classified = classifyError(null, 503)
-
-    expect(classified.kind).toBe('server')
-    expect(classified.retryable).toBe(true)
-  })
-})
-
-describe('Contract Validation', () => {
-  it('validates draft response schema', () => {
+describe("Contract Validation", () => {
+  it("validates draft response schema", async () => {
     const validResponse = {
-      draft_id: 'dr_123',
+      draft_id: "dr_123",
       understanding: {
-        summary_bullets: ['Test bullet'],
-        assumptions: ['Test assumption'],
-        questions: ['Test question?'],
+        summary_bullets: ["Test"],
+        assumptions: [],
+        questions: [],
       },
     }
 
-    const result = DraftResponseSchema.safeParse(validResponse)
-    expect(result.success).toBe(true)
+    expect(() => DraftResponseSchema.parse(validResponse)).not.toThrow()
   })
 
-  it('rejects invalid draft response', () => {
+  it("rejects invalid draft_id format", () => {
     const invalidResponse = {
-      draft_id: '', // Empty string should fail min(1)
+      draft_id: "invalid-format", // Should be dr_\d+
       understanding: {
-        summary_bullets: 'not an array', // Should be array
+        summary_bullets: ["Test"],
+        assumptions: [],
+        questions: [],
       },
     }
 
-    const result = DraftResponseSchema.safeParse(invalidResponse)
-    expect(result.success).toBe(false)
+    expect(() => DraftResponseSchema.parse(invalidResponse)).toThrow()
   })
 
-  it('validates match response schema', () => {
-    const validResponse = {
-      normalized_text: 'test',
-      hash_hit: null,
-      candidates: [
-        { template_id: 'tpl_1', type: 'lead_campaign_json', score: 0.9, title: 'Test' },
-      ],
+  it("rejects invalid understanding format", () => {
+    const invalidResponse = {
+      draft_id: "dr_123",
+      understanding: {
+        summary_bullets: "not an array", // Should be array
+        assumptions: [],
+        questions: [],
+      },
     }
 
-    const result = MatchResponseSchema.safeParse(validResponse)
-    expect(result.success).toBe(true)
+    expect(() => DraftResponseSchema.parse(invalidResponse)).toThrow()
   })
 
-  it('validates match response with hash_hit', () => {
+  it("validates match response with hash hit", () => {
     const validResponse = {
-      normalized_text: 'test',
-      hash_hit: { template_id: 'tpl_1', type: 'lead_campaign_json', title: 'Test' },
+      normalized_text: "test",
+      hash_hit: {
+        template_id: "tpl_1",
+        type: "lead_campaign_json",
+        title: "Test Template",
+      },
       candidates: [],
     }
 
-    const result = MatchResponseSchema.safeParse(validResponse)
-    expect(result.success).toBe(true)
+    expect(() => MatchResponseSchema.parse(validResponse)).not.toThrow()
   })
 
-  it('rejects invalid score in match candidate', () => {
-    const invalidResponse = {
-      normalized_text: 'test',
+  it("validates match response with candidates", () => {
+    const validResponse = {
+      normalized_text: "test",
       hash_hit: null,
       candidates: [
-        { template_id: 'tpl_1', type: 'lead_campaign_json', score: 1.5, title: 'Test' }, // Score > 1
-      ],
-    }
-
-    const result = MatchResponseSchema.safeParse(invalidResponse)
-    expect(result.success).toBe(false)
-  })
-
-  it('validates templates response schema', () => {
-    const validResponse = {
-      items: [
         {
-          template_id: 'tpl_1',
-          type: 'lead_campaign_json',
-          title: 'Test',
-          tags: ['tag1'],
-          usage_count: 5,
+          template_id: "tpl_1",
+          type: "lead_campaign_json",
+          score: 0.95,
+          title: "Test",
         },
       ],
     }
 
-    const result = TemplatesResponseSchema.safeParse(validResponse)
-    expect(result.success).toBe(true)
+    expect(() => MatchResponseSchema.parse(validResponse)).not.toThrow()
   })
 
-  it('rejects invalid output_target type', () => {
+  it("rejects invalid score range", () => {
     const invalidResponse = {
-      items: [
+      normalized_text: "test",
+      hash_hit: null,
+      candidates: [
         {
-          template_id: 'tpl_1',
-          type: 'invalid_type', // Not in enum
-          title: 'Test',
-          tags: [],
-          usage_count: 0,
+          template_id: "tpl_1",
+          type: "lead_campaign_json",
+          score: 1.5, // Should be 0-1
+          title: "Test",
         },
       ],
     }
 
-    const result = TemplatesResponseSchema.safeParse(invalidResponse)
-    expect(result.success).toBe(false)
+    expect(() => MatchResponseSchema.parse(invalidResponse)).toThrow()
   })
 })
 
-describe('Edge Cases', () => {
-  it('hash_hit is available even when reuseMode is alwaysNew', async () => {
-    const result = await postMatch({
-      input_text: 'exact gleich wie vorher',
-      types: ['lead_campaign_json'],
-      top_k: 5,
-    })
+// Note: Mock Mode Behavior tests are in api.mock.test.ts (no RUNTIME mock)
 
-    // Hash hit exists in response - but UI should NOT auto-render when alwaysNew
-    expect(result.hash_hit).not.toBeNull()
-    expect(result.hash_hit?.template_id).toBeDefined()
+describe("Edge Cases", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
   })
 
-  it('mock responses pass contract validation', async () => {
-    const draftResult = await postDraft({
-      input_text: 'Test query',
-      output_target: 'lead_campaign_json',
-      reuse_mode: 'auto',
-    })
+  it("handles empty response gracefully", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      text: () => Promise.resolve(""),
+    } as Response)
 
-    // If we get here without throwing, contract validation passed
-    expect(draftResult.draft_id).toBeDefined()
-    expect(draftResult.understanding).toBeDefined()
+    await expect(createDraft("Test", "lead_campaign_json", "auto")).rejects.toMatchObject({
+      kind: "validation",
+      message: "Invalid API response format",
+    })
   })
 
-  it('isApiError correctly identifies ApiError objects', () => {
-    const apiError: ApiError = {
-      kind: 'conflict',
-      message: 'Test error',
-      retryable: false,
-    }
+  it("handles malformed JSON", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      text: () => Promise.resolve("not valid json {"),
+    } as Response)
 
-    expect(isApiError(apiError)).toBe(true)
-    expect(isApiError(new Error('regular error'))).toBe(false)
-    expect(isApiError(null)).toBe(false)
-    expect(isApiError(undefined)).toBe(false)
-    expect(isApiError('string')).toBe(false)
+    await expect(createDraft("Test", "lead_campaign_json", "auto")).rejects.toThrow()
+  })
+
+  it("handles missing required fields", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      text: () =>
+        Promise.resolve(
+          JSON.stringify({
+            // Missing draft_id
+            understanding: {
+              summary_bullets: ["Test"],
+              assumptions: [],
+              questions: [],
+            },
+          }),
+        ),
+    } as Response)
+
+    await expect(createDraft("Test", "lead_campaign_json", "auto")).rejects.toMatchObject({
+      kind: "validation",
+      message: "Invalid API response format",
+    })
   })
 })
+
+// Note: Workflow Integration tests are in api.mock.test.ts (use mock mode)

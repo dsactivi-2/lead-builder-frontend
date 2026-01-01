@@ -1,191 +1,145 @@
-'use client'
+"use client"
 
-import { useReducer, useCallback } from 'react'
-import {
-  builderReducer,
-  initialBuilderState,
-  canSendMessage,
-  isLoading,
-  getPhaseLabel,
-  type BuilderState,
-  type BuilderPhase,
-} from '@/lib/workflow'
-import { postDraft, postMatch, postRender, postConfirm, postTemplate } from '@/lib/api'
-import { classifyError, isApiError, type ApiError } from '@/lib/errors'
-import type { OutputTarget, ReuseMode, Artifact, MatchCandidate, HashHit } from '@/lib/contracts'
+import { useState, useCallback } from "react"
+import { initialState, type BuilderState, type BuilderPhase, canTransitionTo } from "@/lib/workflow"
+import type { Artifact, OutputTarget, ReuseMode } from "@/lib/contracts"
+import type { ApiError } from "@/lib/errors"
+import { createDraft, matchTemplates, confirmDraft, renderTemplate } from "@/lib/api"
 
-export interface UseBuilderWorkflowReturn {
-  state: BuilderState
-  phase: BuilderPhase
-  phaseLabel: string
-  isLoading: boolean
-  canSendMessage: boolean
+export function useBuilderWorkflow() {
+  const [state, setState] = useState<BuilderState>(initialState)
 
-  // Actions
-  sendMessage: (text: string, outputTarget: OutputTarget, reuseMode: ReuseMode) => Promise<void>
-  confirm: (edits?: string) => Promise<void>
-  reject: () => void
-  useTemplate: (templateId: string, outputTarget: OutputTarget) => Promise<void>
-  createNew: () => void
-  saveTemplate: (title: string, tags: string[]) => Promise<void>
-  reset: () => void
-  retry: () => void
-}
-
-export function useBuilderWorkflow(): UseBuilderWorkflowReturn {
-  const [state, dispatch] = useReducer(builderReducer, initialBuilderState)
-
-  const sendMessage = useCallback(
-    async (text: string, outputTarget: OutputTarget, reuseMode: ReuseMode) => {
-      dispatch({ type: 'START_DRAFT', inputText: text })
-
-      try {
-        // Step 1: Create draft
-        const draftRes = await postDraft({
-          input_text: text,
-          output_target: outputTarget,
-          reuse_mode: reuseMode,
-        })
-        dispatch({ type: 'DRAFT_SUCCESS', draftId: draftRes.draft_id })
-
-        // Step 2: Match templates
-        try {
-          const matchRes = await postMatch({
-            input_text: text,
-            types: ['lead_campaign_json', 'lead_job_json', 'call_prompt', 'enrichment_prompt'],
-            top_k: 5,
-          })
-
-          if (matchRes.hash_hit && reuseMode !== 'alwaysNew') {
-            dispatch({ type: 'MATCH_HASH_HIT', hashHit: matchRes.hash_hit })
-
-            // Auto-render for hash hit
-            try {
-              const renderRes = await postRender({
-                template_id: matchRes.hash_hit.template_id,
-                output_target: outputTarget,
-              })
-              dispatch({
-                type: 'RENDER_SUCCESS',
-                artifact: { type: outputTarget, content: renderRes.content },
-              })
-            } catch (renderError) {
-              const error = isApiError(renderError) ? renderError : classifyError(renderError)
-              dispatch({ type: 'RENDER_ERROR', error })
-            }
-          } else if (matchRes.candidates.length > 0) {
-            dispatch({ type: 'MATCH_CANDIDATES', candidates: matchRes.candidates })
-          } else {
-            dispatch({ type: 'MATCH_NO_RESULTS' })
-          }
-        } catch {
-          // Match errors are non-fatal
-          dispatch({ type: 'MATCH_ERROR', error: { kind: 'server', message: 'Match failed', retryable: true } })
-        }
-      } catch (error) {
-        const apiError = isApiError(error) ? error : classifyError(error)
-        dispatch({ type: 'DRAFT_ERROR', error: apiError })
+  const transitionTo = useCallback((phase: BuilderPhase, updates: Partial<BuilderState> = {}) => {
+    setState((prev) => {
+      if (!canTransitionTo(prev.phase, phase)) {
+        console.warn(`[v0] Invalid transition from ${prev.phase} to ${phase}`)
+        return prev
       }
-    },
-    []
-  )
-
-  const confirm = useCallback(
-    async (edits?: string) => {
-      if (!state.draftId) return
-
-      dispatch({ type: 'START_CONFIRM' })
-
-      try {
-        const res = await postConfirm({
-          draft_id: state.draftId,
-          output_target: (state.artifact?.type as OutputTarget) || 'lead_campaign_json',
-          edits_text: edits,
-        })
-        dispatch({ type: 'CONFIRM_SUCCESS', artifact: res.artifact })
-      } catch (error) {
-        const apiError = isApiError(error) ? error : classifyError(error)
-        dispatch({ type: 'CONFIRM_ERROR', error: apiError })
-      }
-    },
-    [state.draftId, state.artifact?.type]
-  )
-
-  const reject = useCallback(() => {
-    dispatch({ type: 'REJECT' })
+      console.log(`[v0] Workflow transition: ${prev.phase} → ${phase}`)
+      return { ...prev, phase, ...updates }
+    })
   }, [])
 
-  const useTemplate = useCallback(
-    async (templateId: string, outputTarget: OutputTarget) => {
-      dispatch({ type: 'SELECT_TEMPLATE', templateId })
-
-      try {
-        const renderRes = await postRender({
-          template_id: templateId,
-          output_target: outputTarget,
-        })
-        dispatch({
-          type: 'RENDER_SUCCESS',
-          artifact: { type: outputTarget, content: renderRes.content },
-        })
-      } catch (error) {
-        const apiError = isApiError(error) ? error : classifyError(error)
-        dispatch({ type: 'RENDER_ERROR', error: apiError })
-      }
+  const setError = useCallback(
+    (error: ApiError) => {
+      console.error("[v0] Workflow error:", error)
+      transitionTo("error", { error })
     },
-    []
-  )
-
-  const createNew = useCallback(() => {
-    dispatch({ type: 'CREATE_NEW' })
-  }, [])
-
-  const saveTemplate = useCallback(
-    async (title: string, tags: string[]) => {
-      if (!state.artifact) return
-
-      dispatch({ type: 'START_SAVE' })
-
-      try {
-        await postTemplate({
-          type: state.artifact.type,
-          title,
-          tags,
-          content: state.artifact.content as Record<string, unknown>,
-        })
-        dispatch({ type: 'SAVE_SUCCESS' })
-      } catch (error) {
-        const apiError = isApiError(error) ? error : classifyError(error)
-        dispatch({ type: 'SAVE_ERROR', error: apiError })
-      }
-    },
-    [state.artifact]
+    [transitionTo],
   )
 
   const reset = useCallback(() => {
-    dispatch({ type: 'RESET' })
+    console.log("[v0] Workflow reset")
+    setState(initialState)
   }, [])
 
-  const retry = useCallback(() => {
-    dispatch({ type: 'RETRY' })
-  }, [])
+  // Action: Send Message
+  const sendMessage = useCallback(
+    async (inputText: string, outputTarget: OutputTarget, reuseMode: ReuseMode) => {
+      try {
+        transitionTo("drafting")
+
+        const draftResponse = await createDraft(inputText, outputTarget, reuseMode)
+
+        transitionTo("matching", { draftId: draftResponse.draft_id })
+
+        const matchResponse = await matchTemplates(inputText, [outputTarget], 5)
+
+        // Decision tree based on reuseMode
+        if (reuseMode !== "alwaysNew" && matchResponse.hash_hit) {
+          // Hash hit found, auto-render if not alwaysNew
+          transitionTo("hash_hit", {
+            hashHit: matchResponse.hash_hit,
+            matchCandidates: matchResponse.candidates,
+          })
+
+          // Auto-render hash hit
+          const renderResponse = await renderTemplate(matchResponse.hash_hit.template_id, outputTarget)
+
+          const artifact: Artifact = {
+            type: outputTarget,
+            content: renderResponse.content,
+          }
+
+          transitionTo("artifact_ready", { artifact })
+        } else if (matchResponse.candidates.length > 0) {
+          // Show candidates
+          transitionTo("candidates", {
+            matchCandidates: matchResponse.candidates,
+            hashHit: null,
+          })
+        } else {
+          // No matches, go to editing
+          transitionTo("editing", {
+            matchCandidates: [],
+            hashHit: null,
+          })
+        }
+      } catch (error) {
+        setError(error as ApiError)
+      }
+    },
+    [transitionTo, setError],
+  )
+
+  // Action: Select Template from Candidates
+  const selectTemplate = useCallback(
+    async (templateId: string, outputTarget: OutputTarget) => {
+      try {
+        const renderResponse = await renderTemplate(templateId, outputTarget)
+
+        const artifact: Artifact = {
+          type: outputTarget,
+          content: renderResponse.content,
+        }
+
+        transitionTo("artifact_ready", { artifact })
+      } catch (error) {
+        setError(error as ApiError)
+      }
+    },
+    [transitionTo, setError],
+  )
+
+  // Action: Create New (from hash_hit or candidates)
+  const createNew = useCallback(() => {
+    transitionTo("editing", { hashHit: null, matchCandidates: [] })
+  }, [transitionTo])
+
+  // Action: Confirm Draft
+  const confirmEdits = useCallback(
+    async (editsText: string) => {
+      if (!state.draftId) {
+        console.error("[v0] No draft ID available")
+        return
+      }
+
+      try {
+        transitionTo("confirming")
+
+        const confirmResponse = await confirmDraft(state.draftId, editsText)
+
+        transitionTo("artifact_ready", { artifact: confirmResponse.artifact })
+      } catch (error) {
+        setError(error as ApiError)
+      }
+    },
+    [state.draftId, transitionTo, setError],
+  )
+
+  // Action: Reject Draft
+  const rejectDraft = useCallback(() => {
+    transitionTo("idle", { draftId: null })
+  }, [transitionTo])
 
   return {
     state,
-    phase: state.phase,
-    phaseLabel: getPhaseLabel(state.phase),
-    isLoading: isLoading(state.phase),
-    canSendMessage: canSendMessage(state.phase),
     sendMessage,
-    confirm,
-    reject,
-    useTemplate,
+    selectTemplate,
     createNew,
-    saveTemplate,
+    confirmEdits,
+    rejectDraft,
     reset,
-    retry,
+    setError,
   }
 }
-
-// Re-export types
-export type { BuilderState, BuilderPhase, Artifact, MatchCandidate, HashHit, ApiError }
