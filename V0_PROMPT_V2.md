@@ -758,3 +758,506 @@ src/
 
 *Generiert: 2026-01-01*
 *Version: 2.0 Production Hardening*
+
+---
+
+# TEIL 8: HOUSEFINDER-ERWEITERUNG (V3)
+
+## Neue Seiten und Komponenten
+
+Die folgenden Seiten erweitern den Lead Builder um vollständige Campaign- und Lead-Management-Funktionen, inspiriert von der Housefinder-Architektur.
+
+---
+
+## 8.1 Dashboard Page (`/dashboard`)
+
+**Beschreibung:** Übersichtsseite mit KPIs, Charts und Quick Actions.
+
+**Test-IDs:**
+```
+data-testid="dashboard_page"
+data-testid="dashboard_stats_campaigns"
+data-testid="dashboard_stats_leads"
+data-testid="dashboard_stats_communications"
+data-testid="dashboard_stats_conversionRate"
+data-testid="dashboard_stats_responseRate"
+data-testid="dashboard_chart_leadsOverTime"
+data-testid="dashboard_list_recentLeads"
+data-testid="dashboard_card_recentLead_{id}"
+data-testid="dashboard_button_newCampaign"
+data-testid="dashboard_button_newLead"
+```
+
+**API Endpoint:**
+```typescript
+GET /v1/dashboard/stats
+Response: DashboardStats {
+  campaigns: { total: number, active: number, urgent: number }
+  leads: { total: number, new_count: number, contacted: number, converted: number, hot: number, avg_score: number | null }
+  communications: { total: number, sent: number, responses: number }
+  recent_leads: Array<{ id, name, company, score, status, quality, created_at }>
+  conversion_rate: string | number
+  response_rate: string | number
+}
+```
+
+**Layout:**
+- Header mit Titel "Dashboard" und Quick-Action Buttons
+- 5 Stat Cards in einer Reihe (Kampagnen, Leads, Kommunikation, Conversion Rate, Response Rate)
+- 2-Spalten Layout: Links Chart (Leads über Zeit), Rechts Recent Leads Liste
+
+---
+
+## 8.2 Campaigns Page (`/campaigns`)
+
+**Beschreibung:** Liste aller Kampagnen mit Filtern und CRUD-Operationen.
+
+**Test-IDs:**
+```
+data-testid="campaigns_page"
+data-testid="campaigns_button_create"
+data-testid="campaigns_filter_status"
+data-testid="campaigns_filter_priority"
+data-testid="campaigns_list"
+data-testid="campaigns_card_{id}"
+data-testid="campaigns_card_{id}_name"
+data-testid="campaigns_card_{id}_status"
+data-testid="campaigns_card_{id}_priority"
+data-testid="campaigns_card_{id}_progress"
+data-testid="campaigns_card_{id}_button_edit"
+data-testid="campaigns_card_{id}_button_delete"
+data-testid="campaigns_card_{id}_button_viewLeads"
+data-testid="campaigns_empty_state"
+```
+
+**API Endpoints:**
+```typescript
+GET /v1/campaigns?status={status}&priority={priority}
+Response: CampaignsResponse { items: Campaign[] }
+
+POST /v1/campaigns
+Body: { name, description?, target_type, priority?, search_criteria?, target_count?, start_date?, end_date? }
+Response: Campaign
+
+PATCH /v1/campaigns/:id
+DELETE /v1/campaigns/:id
+GET /v1/campaigns/:id/stats → CampaignStats
+```
+
+**Types:**
+```typescript
+type CampaignStatus = "active" | "paused" | "completed" | "archived"
+type CampaignPriority = "urgent" | "high" | "normal" | "low"
+type CampaignTargetType = "lead_campaign" | "job_posting" | "call_list"
+```
+
+---
+
+## 8.3 Leads Page (`/leads`)
+
+**Beschreibung:** Vollständige Lead-Verwaltung mit Tabelle, Filtern und Bulk-Aktionen.
+
+**Test-IDs:**
+```
+data-testid="leads_page"
+data-testid="leads_button_create"
+data-testid="leads_button_import"
+data-testid="leads_button_bulkAction"
+data-testid="leads_filter_status"
+data-testid="leads_filter_quality"
+data-testid="leads_filter_campaign"
+data-testid="leads_search_input"
+data-testid="leads_sort_select"
+data-testid="leads_table"
+data-testid="leads_table_header"
+data-testid="leads_table_row_{id}"
+data-testid="leads_table_row_{id}_checkbox"
+data-testid="leads_table_row_{id}_name"
+data-testid="leads_table_row_{id}_company"
+data-testid="leads_table_row_{id}_email"
+data-testid="leads_table_row_{id}_score"
+data-testid="leads_table_row_{id}_status"
+data-testid="leads_table_row_{id}_quality"
+data-testid="leads_table_row_{id}_button_view"
+data-testid="leads_table_row_{id}_button_contact"
+data-testid="leads_pagination"
+```
+
+**API Endpoints:**
+```typescript
+GET /v1/leads?campaign_id=&status=&quality=&limit=&offset=&sort=&order=
+Response: LeadsResponse { items: Lead[], total: number, limit: number, offset: number }
+
+POST /v1/leads
+Body: { campaign_id?, source, name?, company?, email?, phone?, location?, tags? }
+Response: Lead
+
+POST /v1/leads/batch
+Body: { campaign_id?, leads: Array<...> }
+Response: BatchLeadsResponse { created: number, duplicates: number, errors: number, items: string[] }
+
+GET /v1/leads/:id → Lead (with communications, analyses)
+PATCH /v1/leads/:id
+DELETE /v1/leads/:id
+
+POST /v1/leads/:id/score
+Body: { criteria?: Record<string, unknown> }
+Response: LeadScoreResponse { lead_id, previous_score, new_score }
+```
+
+**Types:**
+```typescript
+type LeadStatus = "new" | "contacted" | "responded" | "qualified" | "converted" | "rejected"
+type LeadQuality = "hot" | "warm" | "cold" | "unknown"
+type LeadSource = "manual" | "scraper" | "import" | "api"
+
+interface LeadWarning {
+  type: string  // "no_contact" | "duplicate" | "incomplete"
+  message: string
+}
+```
+
+---
+
+## 8.4 Communications Page (`/communications`)
+
+**Beschreibung:** Übersicht aller Kommunikationen mit Filter- und Suchfunktion.
+
+**Test-IDs:**
+```
+data-testid="communications_page"
+data-testid="communications_button_compose"
+data-testid="communications_filter_channel"
+data-testid="communications_filter_status"
+data-testid="communications_filter_direction"
+data-testid="communications_list"
+data-testid="communications_item_{id}"
+data-testid="communications_item_{id}_channel"
+data-testid="communications_item_{id}_direction"
+data-testid="communications_item_{id}_status"
+data-testid="communications_item_{id}_leadName"
+data-testid="communications_item_{id}_preview"
+data-testid="communications_item_{id}_button_reply"
+data-testid="communications_pagination"
+```
+
+**API Endpoints:**
+```typescript
+GET /v1/communications?lead_id=&campaign_id=&channel=&status=&limit=&offset=
+Response: CommunicationsResponse { items: Communication[], limit, offset }
+
+POST /v1/communications
+Body: { lead_id?, campaign_id?, channel, type?, subject?, message, template_id? }
+Response: Communication
+
+POST /v1/communications/batch
+Body: { lead_ids: string[], campaign_id?, channel, type?, subject?, message }
+Response: BatchCommunicationsResponse { sent: number, failed: number, items: string[] }
+
+POST /v1/communications/:id/response
+Body: { response_text: string }
+Response: CommunicationResponseResult { response_id, original_id }
+```
+
+**Types:**
+```typescript
+type CommunicationChannel = "email" | "whatsapp" | "phone" | "linkedin"
+type CommunicationDirection = "outbound" | "inbound"
+type CommunicationType = "initial" | "followup" | "response" | "thank_you"
+type CommunicationStatus = "pending" | "sent" | "delivered" | "read" | "failed"
+```
+
+---
+
+## 8.5 Sources Page (`/sources`)
+
+**Beschreibung:** Verwaltung von Lead-Quellen (Scraper, APIs, Imports).
+
+**Test-IDs:**
+```
+data-testid="sources_page"
+data-testid="sources_button_create"
+data-testid="sources_list"
+data-testid="sources_card_{id}"
+data-testid="sources_card_{id}_name"
+data-testid="sources_card_{id}_type"
+data-testid="sources_card_{id}_platform"
+data-testid="sources_card_{id}_toggle_active"
+data-testid="sources_card_{id}_stats"
+data-testid="sources_card_{id}_button_edit"
+```
+
+**API Endpoints:**
+```typescript
+GET /v1/sources
+Response: SourcesResponse { items: Source[] }
+
+POST /v1/sources
+Body: { name, type, platform?, config?, is_active? }
+Response: Source
+
+PATCH /v1/sources/:id
+```
+
+**Types:**
+```typescript
+type SourceType = "scraper" | "api" | "import" | "manual"
+```
+
+---
+
+## 8.6 Analyses Page (`/analyses`)
+
+**Beschreibung:** KI-Analysen von Lead-Antworten und Kommunikation.
+
+**Test-IDs:**
+```
+data-testid="analyses_page"
+data-testid="analyses_button_create"
+data-testid="analyses_filter_type"
+data-testid="analyses_list"
+data-testid="analyses_item_{id}"
+data-testid="analyses_item_{id}_type"
+data-testid="analyses_item_{id}_sentiment"
+data-testid="analyses_item_{id}_confidence"
+data-testid="analyses_item_{id}_action"
+```
+
+**API Endpoints:**
+```typescript
+GET /v1/analyses?lead_id=&analysis_type=&limit=
+Response: AnalysesResponse { items: Analysis[] }
+
+POST /v1/analyses
+Body: { communication_id?, lead_id?, analysis_type, text_to_analyze }
+Response: Analysis
+```
+
+**Types:**
+```typescript
+type AnalysisType = "response" | "sentiment" | "intent" | "qualification"
+type Sentiment = "positive" | "neutral" | "negative"
+```
+
+---
+
+## 8.7 Reports Page (`/reports`)
+
+**Beschreibung:** Report-Generator und Archiv.
+
+**Test-IDs:**
+```
+data-testid="reports_page"
+data-testid="reports_button_generate"
+data-testid="reports_filter_type"
+data-testid="reports_filter_campaign"
+data-testid="reports_list"
+data-testid="reports_item_{id}"
+data-testid="reports_item_{id}_title"
+data-testid="reports_item_{id}_type"
+data-testid="reports_item_{id}_button_view"
+data-testid="reports_item_{id}_button_download"
+data-testid="reports_generateDialog"
+data-testid="reports_generateDialog_type"
+data-testid="reports_generateDialog_campaign"
+data-testid="reports_generateDialog_submit"
+```
+
+**API Endpoints:**
+```typescript
+GET /v1/reports?campaign_id=&report_type=&limit=
+Response: ReportsResponse { items: Report[] }
+
+POST /v1/reports
+Body: { campaign_id?, report_type, period_start?, period_end? }
+Response: Report
+```
+
+**Types:**
+```typescript
+type ReportType = "daily" | "weekly" | "campaign_summary" | "lead_quality"
+```
+
+---
+
+## 8.8 Scheduled Tasks (`/tasks`)
+
+**API Endpoints:**
+```typescript
+GET /v1/tasks?status=&task_type=&limit=
+Response: ScheduledTasksResponse { items: ScheduledTask[] }
+
+POST /v1/tasks
+Body: { task_type, reference_id?, reference_type?, scheduled_at, payload? }
+Response: ScheduledTask
+```
+
+**Types:**
+```typescript
+type TaskType = "campaign_run" | "followup" | "report" | "cleanup"
+type TaskStatus = "pending" | "running" | "completed" | "failed" | "cancelled"
+```
+
+---
+
+## 8.9 Wiederverwendbare Komponenten
+
+### StatusBadge
+```typescript
+data-testid="statusBadge_{status}"
+Props: status: LeadStatus
+Farben: new=blue, contacted=yellow, responded=green, qualified=purple, converted=emerald, rejected=red
+```
+
+### QualityBadge
+```typescript
+data-testid="qualityBadge_{quality}"
+Props: quality: LeadQuality
+Farben: hot=red, warm=orange, cold=blue, unknown=gray
+```
+
+### PriorityBadge
+```typescript
+data-testid="priorityBadge_{priority}"
+Props: priority: CampaignPriority
+Farben: urgent=red, high=orange, normal=blue, low=gray
+```
+
+### ChannelIcon
+```typescript
+data-testid="channelIcon_{channel}"
+Props: channel: CommunicationChannel
+Icons: email=Mail, whatsapp=MessageCircle, phone=Phone, linkedin=Linkedin
+```
+
+### ScoreIndicator
+```typescript
+data-testid="scoreIndicator"
+Props: score: number (0-100)
+Farben: 0-30=red, 31-60=yellow, 61-80=green, 81-100=emerald
+```
+
+### WarningAlert
+```typescript
+data-testid="warningAlert_{type}"
+Props: warnings: LeadWarning[]
+```
+
+---
+
+## 8.10 Navigation Sidebar
+
+**Test-IDs:**
+```
+data-testid="sidebar"
+data-testid="sidebar_logo"
+data-testid="sidebar_nav"
+data-testid="sidebar_navItem_dashboard"
+data-testid="sidebar_navItem_campaigns"
+data-testid="sidebar_navItem_leads"
+data-testid="sidebar_navItem_communications"
+data-testid="sidebar_navItem_sources"
+data-testid="sidebar_navItem_analyses"
+data-testid="sidebar_navItem_reports"
+data-testid="sidebar_navItem_builder"
+data-testid="sidebar_navItem_settings"
+data-testid="sidebar_toggle"
+```
+
+---
+
+## 8.11 API Client Erweiterung
+
+Alle neuen API-Funktionen sind in `src/lib/api.ts` implementiert:
+
+```typescript
+// Campaigns
+getCampaigns(filters?)
+createCampaign(data)
+getCampaign(id)
+updateCampaign(id, data)
+deleteCampaign(id)
+getCampaignStats(id)
+
+// Leads
+getLeads(filters?)
+createLead(data)
+createLeadsBatch(data)
+getLead(id)
+updateLead(id, data)
+deleteLead(id)
+recalculateLeadScore(id, criteria?)
+
+// Communications
+getCommunications(filters?)
+sendCommunication(data)
+sendCommunicationsBatch(data)
+recordCommunicationResponse(id, response_text)
+
+// Sources
+getSources()
+createSource(data)
+updateSource(id, data)
+
+// Analyses
+getAnalyses(filters?)
+createAnalysis(data)
+
+// Reports
+getReports(filters?)
+generateReport(data)
+
+// Tasks
+getScheduledTasks(filters?)
+createScheduledTask(data)
+
+// Dashboard
+getDashboardStats()
+```
+
+---
+
+## 8.12 Vollständige Endpoint-Tabelle
+
+| Endpoint | Methode | Beschreibung |
+|----------|---------|--------------|
+| `/v1/dashboard/stats` | GET | Dashboard-Statistiken |
+| `/v1/campaigns` | GET, POST | Kampagnen-Liste und Erstellen |
+| `/v1/campaigns/:id` | GET, PATCH, DELETE | Einzelne Kampagne |
+| `/v1/campaigns/:id/stats` | GET | Kampagnen-Statistiken |
+| `/v1/leads` | GET, POST | Leads-Liste und Erstellen |
+| `/v1/leads/batch` | POST | Batch-Import von Leads |
+| `/v1/leads/:id` | GET, PATCH, DELETE | Einzelner Lead |
+| `/v1/leads/:id/score` | POST | Lead-Score neu berechnen |
+| `/v1/communications` | GET, POST | Kommunikation Liste/Senden |
+| `/v1/communications/batch` | POST | Batch-Versand |
+| `/v1/communications/:id/response` | POST | Antwort aufzeichnen |
+| `/v1/sources` | GET, POST | Quellen-Liste und Erstellen |
+| `/v1/sources/:id` | PATCH | Quelle aktualisieren |
+| `/v1/analyses` | GET, POST | Analysen Liste/Erstellen |
+| `/v1/reports` | GET, POST | Reports Liste/Generieren |
+| `/v1/tasks` | GET, POST | Geplante Aufgaben |
+| `/v1/templates` | GET, POST | Templates |
+| `/v1/templates/match` | POST | Template-Matching |
+| `/v1/templates/render` | POST | Template rendern |
+| `/v1/builder/draft` | POST | Draft erstellen |
+| `/v1/builder/confirm` | POST | Draft bestätigen |
+| `/health` | GET | Health Check |
+
+---
+
+## WICHTIGE HINWEISE FÜR V0
+
+1. **Sprache:** Alle UI-Texte auf Deutsch
+2. **Test-IDs:** Jedes interaktive Element MUSS ein `data-testid` haben
+3. **Responsive:** Mobile-first Design, Sidebar collapsed auf Mobile
+4. **Dark Mode:** Als Standard (dark mode first)
+5. **Loading States:** Skeleton-Komponenten für alle Datenladen
+6. **Error States:** Toast-Benachrichtigungen für Fehler
+7. **Empty States:** Illustrationen und Call-to-Action für leere Listen
+8. **Accessibility:** ARIA-Labels, Keyboard Navigation, Fokus-Management
+
+---
+
+*Generiert: 2026-01-01*
+*Version: 3.0 Housefinder Integration*

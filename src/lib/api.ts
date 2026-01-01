@@ -7,6 +7,26 @@ import {
   ConfirmResponseSchema,
   TemplatesResponseSchema,
   CreateTemplateResponseSchema,
+  CampaignsResponseSchema,
+  CampaignSchema,
+  CampaignStatsSchema,
+  LeadsResponseSchema,
+  LeadSchema,
+  BatchLeadsResponseSchema,
+  LeadScoreResponseSchema,
+  CommunicationsResponseSchema,
+  CommunicationSchema,
+  BatchCommunicationsResponseSchema,
+  CommunicationResponseSchema,
+  SourcesResponseSchema,
+  SourceSchema,
+  AnalysesResponseSchema,
+  AnalysisSchema,
+  ReportsResponseSchema,
+  ReportSchema,
+  ScheduledTasksResponseSchema,
+  ScheduledTaskSchema,
+  DashboardStatsSchema,
   type OutputTarget,
   type ReuseMode,
   type DraftResponse,
@@ -15,6 +35,38 @@ import {
   type ConfirmResponse,
   type TemplatesResponse,
   type CreateTemplateResponse,
+  type CampaignsResponse,
+  type Campaign,
+  type CampaignStats,
+  type CampaignStatus,
+  type CampaignPriority,
+  type CampaignTargetType,
+  type LeadsResponse,
+  type Lead,
+  type BatchLeadsResponse,
+  type LeadScoreResponse,
+  type LeadStatus,
+  type LeadQuality,
+  type LeadSource,
+  type CommunicationsResponse,
+  type Communication,
+  type BatchCommunicationsResponse,
+  type CommunicationResponseResult,
+  type CommunicationChannel,
+  type CommunicationType,
+  type SourcesResponse,
+  type Source,
+  type SourceType,
+  type AnalysesResponse,
+  type Analysis,
+  type AnalysisType,
+  type ReportsResponse,
+  type Report,
+  type ReportType,
+  type ScheduledTasksResponse,
+  type ScheduledTask,
+  type TaskType,
+  type DashboardStats,
 } from "./contracts"
 import { classifyError, type ApiError } from "./errors"
 
@@ -355,4 +407,396 @@ export async function saveTemplate(
     },
     CreateTemplateResponseSchema,
   )
+}
+
+// ============================================================================
+// CAMPAIGNS API (Housefinder-inspired)
+// ============================================================================
+
+// GET /v1/campaigns
+export async function getCampaigns(filters?: {
+  status?: CampaignStatus
+  priority?: CampaignPriority
+}): Promise<CampaignsResponse> {
+  const params = new URLSearchParams()
+  if (filters?.status) params.append("status", filters.status)
+  if (filters?.priority) params.append("priority", filters.priority)
+
+  const url = `${RUNTIME.apiBaseUrl}/v1/campaigns${params.toString() ? `?${params}` : ""}`
+  return fetchWithValidation(url, { method: "GET" }, CampaignsResponseSchema)
+}
+
+// POST /v1/campaigns
+export async function createCampaign(data: {
+  name: string
+  description?: string
+  target_type: CampaignTargetType
+  priority?: CampaignPriority
+  search_criteria?: Record<string, unknown>
+  target_count?: number
+  start_date?: string
+  end_date?: string
+  run_interval_hours?: number
+}): Promise<Campaign> {
+  const url = `${RUNTIME.apiBaseUrl}/v1/campaigns`
+  return fetchWithValidation(
+    url,
+    { method: "POST", body: JSON.stringify(data) },
+    CampaignSchema,
+  )
+}
+
+// GET /v1/campaigns/:id
+export async function getCampaign(id: string): Promise<Campaign> {
+  const url = `${RUNTIME.apiBaseUrl}/v1/campaigns/${id}`
+  return fetchWithValidation(url, { method: "GET" }, CampaignSchema)
+}
+
+// PATCH /v1/campaigns/:id
+export async function updateCampaign(id: string, data: Partial<Campaign>): Promise<Campaign> {
+  const url = `${RUNTIME.apiBaseUrl}/v1/campaigns/${id}`
+  return fetchWithValidation(
+    url,
+    { method: "PATCH", body: JSON.stringify(data) },
+    CampaignSchema,
+  )
+}
+
+// DELETE /v1/campaigns/:id
+export async function deleteCampaign(id: string): Promise<void> {
+  const url = `${RUNTIME.apiBaseUrl}/v1/campaigns/${id}`
+  await fetch(url, { method: "DELETE" })
+}
+
+// GET /v1/campaigns/:id/stats
+export async function getCampaignStats(id: string): Promise<CampaignStats> {
+  const url = `${RUNTIME.apiBaseUrl}/v1/campaigns/${id}/stats`
+  return fetchWithValidation(url, { method: "GET" }, CampaignStatsSchema)
+}
+
+// ============================================================================
+// LEADS API (Housefinder Listing-inspired)
+// ============================================================================
+
+// GET /v1/leads
+export async function getLeads(filters?: {
+  campaign_id?: string
+  status?: LeadStatus
+  quality?: LeadQuality
+  limit?: number
+  offset?: number
+  sort?: "created_at" | "score" | "name" | "company"
+  order?: "asc" | "desc"
+}): Promise<LeadsResponse> {
+  const params = new URLSearchParams()
+  if (filters?.campaign_id) params.append("campaign_id", filters.campaign_id)
+  if (filters?.status) params.append("status", filters.status)
+  if (filters?.quality) params.append("quality", filters.quality)
+  if (filters?.limit) params.append("limit", filters.limit.toString())
+  if (filters?.offset) params.append("offset", filters.offset.toString())
+  if (filters?.sort) params.append("sort", filters.sort)
+  if (filters?.order) params.append("order", filters.order)
+
+  const url = `${RUNTIME.apiBaseUrl}/v1/leads${params.toString() ? `?${params}` : ""}`
+  return fetchWithValidation(url, { method: "GET" }, LeadsResponseSchema)
+}
+
+// POST /v1/leads
+export async function createLead(data: {
+  campaign_id?: string
+  source: LeadSource
+  source_platform?: string
+  source_url?: string
+  name?: string
+  company?: string
+  position?: string
+  email?: string
+  phone?: string
+  location?: string
+  raw_data?: Record<string, unknown>
+  tags?: string[]
+  notes?: string
+}): Promise<Lead> {
+  const url = `${RUNTIME.apiBaseUrl}/v1/leads`
+  return fetchWithValidation(
+    url,
+    { method: "POST", body: JSON.stringify(data) },
+    LeadSchema,
+  )
+}
+
+// POST /v1/leads/batch
+export async function createLeadsBatch(data: {
+  campaign_id?: string
+  leads: Array<{
+    source?: LeadSource
+    source_platform?: string
+    name?: string
+    company?: string
+    position?: string
+    email?: string
+    phone?: string
+    location?: string
+    raw_data?: Record<string, unknown>
+    tags?: string[]
+  }>
+}): Promise<BatchLeadsResponse> {
+  const url = `${RUNTIME.apiBaseUrl}/v1/leads/batch`
+  return fetchWithValidation(
+    url,
+    { method: "POST", body: JSON.stringify(data) },
+    BatchLeadsResponseSchema,
+  )
+}
+
+// GET /v1/leads/:id
+export async function getLead(id: string): Promise<Lead> {
+  const url = `${RUNTIME.apiBaseUrl}/v1/leads/${id}`
+  return fetchWithValidation(url, { method: "GET" }, LeadSchema)
+}
+
+// PATCH /v1/leads/:id
+export async function updateLead(id: string, data: Partial<Lead>): Promise<Lead> {
+  const url = `${RUNTIME.apiBaseUrl}/v1/leads/${id}`
+  return fetchWithValidation(
+    url,
+    { method: "PATCH", body: JSON.stringify(data) },
+    LeadSchema,
+  )
+}
+
+// DELETE /v1/leads/:id
+export async function deleteLead(id: string): Promise<void> {
+  const url = `${RUNTIME.apiBaseUrl}/v1/leads/${id}`
+  await fetch(url, { method: "DELETE" })
+}
+
+// POST /v1/leads/:id/score
+export async function recalculateLeadScore(id: string, criteria?: Record<string, unknown>): Promise<LeadScoreResponse> {
+  const url = `${RUNTIME.apiBaseUrl}/v1/leads/${id}/score`
+  return fetchWithValidation(
+    url,
+    { method: "POST", body: JSON.stringify({ criteria }) },
+    LeadScoreResponseSchema,
+  )
+}
+
+// ============================================================================
+// COMMUNICATIONS API (Housefinder Email/WhatsApp-inspired)
+// ============================================================================
+
+// GET /v1/communications
+export async function getCommunications(filters?: {
+  lead_id?: string
+  campaign_id?: string
+  channel?: CommunicationChannel
+  status?: string
+  limit?: number
+  offset?: number
+}): Promise<CommunicationsResponse> {
+  const params = new URLSearchParams()
+  if (filters?.lead_id) params.append("lead_id", filters.lead_id)
+  if (filters?.campaign_id) params.append("campaign_id", filters.campaign_id)
+  if (filters?.channel) params.append("channel", filters.channel)
+  if (filters?.status) params.append("status", filters.status)
+  if (filters?.limit) params.append("limit", filters.limit.toString())
+  if (filters?.offset) params.append("offset", filters.offset.toString())
+
+  const url = `${RUNTIME.apiBaseUrl}/v1/communications${params.toString() ? `?${params}` : ""}`
+  return fetchWithValidation(url, { method: "GET" }, CommunicationsResponseSchema)
+}
+
+// POST /v1/communications
+export async function sendCommunication(data: {
+  lead_id?: string
+  campaign_id?: string
+  channel: CommunicationChannel
+  type?: CommunicationType
+  subject?: string
+  message: string
+  template_id?: string
+}): Promise<Communication> {
+  const url = `${RUNTIME.apiBaseUrl}/v1/communications`
+  return fetchWithValidation(
+    url,
+    { method: "POST", body: JSON.stringify(data) },
+    CommunicationSchema,
+  )
+}
+
+// POST /v1/communications/batch
+export async function sendCommunicationsBatch(data: {
+  lead_ids: string[]
+  campaign_id?: string
+  channel: CommunicationChannel
+  type?: CommunicationType
+  subject?: string
+  message: string
+  template_id?: string
+}): Promise<BatchCommunicationsResponse> {
+  const url = `${RUNTIME.apiBaseUrl}/v1/communications/batch`
+  return fetchWithValidation(
+    url,
+    { method: "POST", body: JSON.stringify(data) },
+    BatchCommunicationsResponseSchema,
+  )
+}
+
+// POST /v1/communications/:id/response
+export async function recordCommunicationResponse(id: string, response_text: string): Promise<CommunicationResponseResult> {
+  const url = `${RUNTIME.apiBaseUrl}/v1/communications/${id}/response`
+  return fetchWithValidation(
+    url,
+    { method: "POST", body: JSON.stringify({ response_text }) },
+    CommunicationResponseSchema,
+  )
+}
+
+// ============================================================================
+// SOURCES API (Housefinder Scraper-inspired)
+// ============================================================================
+
+// GET /v1/sources
+export async function getSources(): Promise<SourcesResponse> {
+  const url = `${RUNTIME.apiBaseUrl}/v1/sources`
+  return fetchWithValidation(url, { method: "GET" }, SourcesResponseSchema)
+}
+
+// POST /v1/sources
+export async function createSource(data: {
+  name: string
+  type: SourceType
+  platform?: string
+  config?: Record<string, unknown>
+  is_active?: boolean
+}): Promise<Source> {
+  const url = `${RUNTIME.apiBaseUrl}/v1/sources`
+  return fetchWithValidation(
+    url,
+    { method: "POST", body: JSON.stringify(data) },
+    SourceSchema,
+  )
+}
+
+// PATCH /v1/sources/:id
+export async function updateSource(id: string, data: Partial<Source>): Promise<Source> {
+  const url = `${RUNTIME.apiBaseUrl}/v1/sources/${id}`
+  return fetchWithValidation(
+    url,
+    { method: "PATCH", body: JSON.stringify(data) },
+    SourceSchema,
+  )
+}
+
+// ============================================================================
+// ANALYSES API (Housefinder AI-inspired)
+// ============================================================================
+
+// GET /v1/analyses
+export async function getAnalyses(filters?: {
+  lead_id?: string
+  analysis_type?: AnalysisType
+  limit?: number
+}): Promise<AnalysesResponse> {
+  const params = new URLSearchParams()
+  if (filters?.lead_id) params.append("lead_id", filters.lead_id)
+  if (filters?.analysis_type) params.append("analysis_type", filters.analysis_type)
+  if (filters?.limit) params.append("limit", filters.limit.toString())
+
+  const url = `${RUNTIME.apiBaseUrl}/v1/analyses${params.toString() ? `?${params}` : ""}`
+  return fetchWithValidation(url, { method: "GET" }, AnalysesResponseSchema)
+}
+
+// POST /v1/analyses
+export async function createAnalysis(data: {
+  communication_id?: string
+  lead_id?: string
+  analysis_type: AnalysisType
+  text_to_analyze: string
+}): Promise<Analysis> {
+  const url = `${RUNTIME.apiBaseUrl}/v1/analyses`
+  return fetchWithValidation(
+    url,
+    { method: "POST", body: JSON.stringify(data) },
+    AnalysisSchema,
+  )
+}
+
+// ============================================================================
+// REPORTS API
+// ============================================================================
+
+// GET /v1/reports
+export async function getReports(filters?: {
+  campaign_id?: string
+  report_type?: ReportType
+  limit?: number
+}): Promise<ReportsResponse> {
+  const params = new URLSearchParams()
+  if (filters?.campaign_id) params.append("campaign_id", filters.campaign_id)
+  if (filters?.report_type) params.append("report_type", filters.report_type)
+  if (filters?.limit) params.append("limit", filters.limit.toString())
+
+  const url = `${RUNTIME.apiBaseUrl}/v1/reports${params.toString() ? `?${params}` : ""}`
+  return fetchWithValidation(url, { method: "GET" }, ReportsResponseSchema)
+}
+
+// POST /v1/reports
+export async function generateReport(data: {
+  campaign_id?: string
+  report_type: ReportType
+  period_start?: string
+  period_end?: string
+}): Promise<Report> {
+  const url = `${RUNTIME.apiBaseUrl}/v1/reports`
+  return fetchWithValidation(
+    url,
+    { method: "POST", body: JSON.stringify(data) },
+    ReportSchema,
+  )
+}
+
+// ============================================================================
+// SCHEDULED TASKS API
+// ============================================================================
+
+// GET /v1/tasks
+export async function getScheduledTasks(filters?: {
+  status?: string
+  task_type?: TaskType
+  limit?: number
+}): Promise<ScheduledTasksResponse> {
+  const params = new URLSearchParams()
+  if (filters?.status) params.append("status", filters.status)
+  if (filters?.task_type) params.append("task_type", filters.task_type)
+  if (filters?.limit) params.append("limit", filters.limit.toString())
+
+  const url = `${RUNTIME.apiBaseUrl}/v1/tasks${params.toString() ? `?${params}` : ""}`
+  return fetchWithValidation(url, { method: "GET" }, ScheduledTasksResponseSchema)
+}
+
+// POST /v1/tasks
+export async function createScheduledTask(data: {
+  task_type: TaskType
+  reference_id?: string
+  reference_type?: string
+  scheduled_at: string
+  payload?: Record<string, unknown>
+}): Promise<ScheduledTask> {
+  const url = `${RUNTIME.apiBaseUrl}/v1/tasks`
+  return fetchWithValidation(
+    url,
+    { method: "POST", body: JSON.stringify(data) },
+    ScheduledTaskSchema,
+  )
+}
+
+// ============================================================================
+// DASHBOARD API
+// ============================================================================
+
+// GET /v1/dashboard/stats
+export async function getDashboardStats(): Promise<DashboardStats> {
+  const url = `${RUNTIME.apiBaseUrl}/v1/dashboard/stats`
+  return fetchWithValidation(url, { method: "GET" }, DashboardStatsSchema)
 }
