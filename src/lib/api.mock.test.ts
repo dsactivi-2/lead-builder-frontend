@@ -32,11 +32,11 @@ describe("Mock Mode Behavior", () => {
 
   it("mock saveTemplate throws conflict for duplicate titles", async () => {
     // First save should succeed
-    const first = await saveTemplate("lead_campaign_json", "Unique Title", ["test"], { name: "Test" })
+    const first = await saveTemplate("lead_campaign_json", "Unique Title " + Date.now(), ["test"], { name: "Test" })
     expect(first.template_id).toBeDefined()
     expect(first.version).toBe(1)
 
-    // Second save with duplicate title should fail
+    // Save with existing title should fail (SHK Westbalkan DE is in mockDb)
     await expect(
       saveTemplate("lead_campaign_json", "SHK Westbalkan DE", ["test"], { name: "Test" }),
     ).rejects.toMatchObject({
@@ -45,14 +45,20 @@ describe("Mock Mode Behavior", () => {
     })
   })
 
-  it("alwaysNew mode ignores hash_hit in logic", async () => {
-    // Mock returns hash_hit, but app should ignore it with alwaysNew
-    const matchResult = await matchTemplates("exact match text", ["lead_campaign_json"], 5)
+  it("hash_hit returned when exact match keywords used", async () => {
+    // "exact" keyword triggers hash_hit
+    const matchResult = await matchTemplates("gleich wie vorher", ["lead_campaign_json"], 5)
 
-    // Even if hash_hit exists, with alwaysNew the app should not auto-render
-    // This is tested at the workflow level, but we verify data structure here
-    expect(matchResult.hash_hit).toBeDefined() // Data is present
-    expect(matchResult.candidates).toBeDefined() // Candidates also present
+    expect(matchResult.hash_hit).toBeDefined()
+    expect(matchResult.hash_hit?.template_id).toBe("tpl_10")
+    expect(matchResult.candidates).toHaveLength(0)
+  })
+
+  it("candidates returned for normal queries", async () => {
+    const matchResult = await matchTemplates("200 SHK Leads München", ["lead_campaign_json", "call_prompt"], 5)
+
+    expect(matchResult.hash_hit).toBeNull()
+    expect(matchResult.candidates.length).toBeGreaterThan(0)
   })
 })
 

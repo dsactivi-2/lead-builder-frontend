@@ -20,6 +20,40 @@ import { classifyError, type ApiError } from "./errors"
 
 const TIMEOUT_MS = 20_000 // 20 Sekunden
 
+// ===== Mock Database (In-Memory) =====
+type MockTemplate = {
+  template_id: string
+  type: OutputTarget
+  title: string
+  tags: string[]
+  content: Record<string, unknown> | string
+  usage_count: number
+  last_used_at?: string
+}
+
+const mockDb: { templates: MockTemplate[] } = {
+  templates: [
+    {
+      template_id: "tpl_10",
+      type: "lead_campaign_json",
+      title: "SHK Westbalkan DE",
+      tags: ["SHK", "DE", "Westbalkan"],
+      content: { type: "lead_campaign", name: "SHK Westbalkan DE", search_spec: { limit: 200 } },
+      usage_count: 12,
+      last_used_at: new Date().toISOString(),
+    },
+    {
+      template_id: "tpl_11",
+      type: "call_prompt",
+      title: "Call Script – Erstkontakt Firma",
+      tags: ["Sales", "Erstkontakt"],
+      content: "Guten Tag, mein Name ist... [CALL SCRIPT]",
+      usage_count: 8,
+      last_used_at: new Date().toISOString(),
+    },
+  ],
+}
+
 async function fetchWithValidation<T>(url: string, options: RequestInit, schema: z.ZodSchema<T>): Promise<T> {
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS)
@@ -78,15 +112,18 @@ export async function createDraft(
   reuse_mode: ReuseMode,
 ): Promise<DraftResponse> {
   if (isMockMode) {
-    await new Promise((r) => setTimeout(r, 800))
+    await new Promise((r) => setTimeout(r, 200))
     const mockResponse = {
-      draft_id: "dr_mock_1234",
+      draft_id: `dr_${Math.floor(Math.random() * 10000)}`,
       understanding: {
-        summary_bullets: ["Ziel: 200 Leads generieren", "Region: München"],
-        assumptions: ["Start sofort möglich"],
-        questions: ["Sind Jobboards erlaubt?"],
+        summary_bullets: [
+          `Input erkannt: ${input_text.slice(0, 60)}${input_text.length > 60 ? "…" : ""}`,
+          "Ziel: Kampagne / Suchauftrag erstellen",
+        ],
+        assumptions: ["Start sofort", "Kein Stopdatum (sofern nicht angegeben)"],
+        questions: ["Soll Jobboards-Suche erlaubt sein?"],
       },
-      proposed_intent_spec: {},
+      proposed_intent_spec: { raw: input_text },
     }
     return DraftResponseSchema.parse(mockResponse)
   }
@@ -111,26 +148,34 @@ export async function createDraft(
 // POST /v1/templates/match
 export async function matchTemplates(input_text: string, types: OutputTarget[], top_k = 5): Promise<MatchResponse> {
   if (isMockMode) {
-    await new Promise((r) => setTimeout(r, 600))
-    const mockResponse = {
-      normalized_text: input_text,
-      hash_hit: null,
-      candidates: [
-        {
-          template_id: "tpl_1",
-          type: "lead_campaign_json" as OutputTarget,
-          score: 0.93,
-          title: "SHK Westbalkan DE",
-        },
-        {
-          template_id: "tpl_2",
-          type: "call_prompt" as OutputTarget,
-          score: 0.86,
-          title: "Call Script",
-        },
-      ],
+    await new Promise((r) => setTimeout(r, 150))
+    const lower = input_text.toLowerCase()
+
+    // Hash hit detection: exact match keywords
+    if (lower.includes("exact") || lower.includes("gleich wie vorher") || lower.includes("wie letztes mal")) {
+      return MatchResponseSchema.parse({
+        normalized_text: "normalized:<EXACT>",
+        hash_hit: { template_id: "tpl_10", type: "lead_campaign_json", title: "SHK Westbalkan DE" },
+        candidates: [],
+      })
     }
-    return MatchResponseSchema.parse(mockResponse)
+
+    // Return candidates from mockDb
+    const candidates = mockDb.templates
+      .filter((t) => types.includes(t.type))
+      .slice(0, top_k)
+      .map((t, i) => ({
+        template_id: t.template_id,
+        type: t.type,
+        score: Math.max(0.5, 0.95 - i * 0.07), // Decreasing scores
+        title: t.title,
+      }))
+
+    return MatchResponseSchema.parse({
+      normalized_text: "normalized:<SIMILAR>",
+      hash_hit: null,
+      candidates,
+    })
   }
 
   const url = `${RUNTIME.apiBaseUrl}/v1/templates/match`
@@ -156,11 +201,22 @@ export async function renderTemplate(
   parameters: object = {},
 ): Promise<RenderResponse> {
   if (isMockMode) {
-    await new Promise((r) => setTimeout(r, 500))
+    await new Promise((r) => setTimeout(r, 150))
+
+    // Find template in mockDb
+    const tpl = mockDb.templates.find((t) => t.template_id === template_id)
+    if (tpl) {
+      // Update usage stats
+      tpl.usage_count += 1
+      tpl.last_used_at = new Date().toISOString()
+      return RenderResponseSchema.parse({ content: tpl.content })
+    }
+
+    // Fallback for unknown templates
     const mockResponse = {
       content: output_target.includes("json")
-        ? { type: output_target, name: "Mock Template", search_spec: { limit: 200 } }
-        : "This is a mock rendered template content.",
+        ? { type: output_target, name: "Unknown Template", template_id }
+        : `Rendered template: ${template_id}`,
     }
     return RenderResponseSchema.parse(mockResponse)
   }
@@ -222,27 +278,22 @@ export async function confirmDraft(draft_id: string, edits_text = ""): Promise<C
 // GET /v1/templates
 export async function getTemplates(type?: OutputTarget, query?: string): Promise<TemplatesResponse> {
   if (isMockMode) {
-    await new Promise((r) => setTimeout(r, 400))
-    const mockResponse = {
-      items: [
-        {
-          template_id: "tpl_1",
-          type: "lead_campaign_json" as OutputTarget,
-          title: "SHK Westbalkan DE",
-          tags: ["SHK", "DE", "Westbalkan"],
-          usage_count: 12,
-          last_used_at: new Date().toISOString(),
-        },
-        {
-          template_id: "tpl_2",
-          type: "call_prompt" as OutputTarget,
-          title: "Call Script",
-          tags: ["Sales"],
-          usage_count: 5,
-        },
-      ],
-    }
-    return TemplatesResponseSchema.parse(mockResponse)
+    await new Promise((r) => setTimeout(r, 120))
+    const q = (query ?? "").toLowerCase().trim()
+
+    const items = mockDb.templates
+      .filter((t) => (type ? t.type === type : true))
+      .filter((t) => (q ? t.title.toLowerCase().includes(q) || t.tags.join(",").toLowerCase().includes(q) : true))
+      .map((t) => ({
+        template_id: t.template_id,
+        type: t.type,
+        title: t.title,
+        tags: t.tags,
+        usage_count: t.usage_count,
+        last_used_at: t.last_used_at,
+      }))
+
+    return TemplatesResponseSchema.parse({ items })
   }
 
   const params = new URLSearchParams({ workspace_id: RUNTIME.workspaceId })
@@ -258,12 +309,14 @@ export async function saveTemplate(
   type: OutputTarget,
   title: string,
   tags: string[],
-  content: any,
+  content: unknown,
 ): Promise<CreateTemplateResponse> {
   if (isMockMode) {
-    await new Promise((r) => setTimeout(r, 500))
-    const existingTitles = ["SHK Westbalkan DE", "Call Script"]
-    if (existingTitles.includes(title)) {
+    await new Promise((r) => setTimeout(r, 150))
+
+    // Check for duplicate title
+    const exists = mockDb.templates.some((t) => t.title.trim().toLowerCase() === title.trim().toLowerCase())
+    if (exists) {
       throw {
         kind: "conflict",
         message: "Template title already exists",
@@ -271,11 +324,20 @@ export async function saveTemplate(
         retryable: false,
       } as ApiError
     }
-    const mockResponse = {
-      template_id: "tpl_new_" + Date.now(),
-      version: 1,
-    }
-    return CreateTemplateResponseSchema.parse(mockResponse)
+
+    // Add to mockDb
+    const template_id = `tpl_${Math.floor(Math.random() * 100000)}`
+    mockDb.templates.unshift({
+      template_id,
+      type,
+      title,
+      tags: tags ?? [],
+      content: content as Record<string, unknown> | string,
+      usage_count: 0,
+      last_used_at: new Date().toISOString(),
+    })
+
+    return CreateTemplateResponseSchema.parse({ template_id, version: 1 })
   }
 
   const url = `${RUNTIME.apiBaseUrl}/v1/templates`
