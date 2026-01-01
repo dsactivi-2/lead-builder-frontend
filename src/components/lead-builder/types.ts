@@ -40,7 +40,7 @@ export type LeadBuilderState =
 // Neue Typen für erweiterte API
 export type OutputTarget = 'lead_campaign_json' | 'lead_job_json' | 'call_prompt' | 'enrichment_prompt';
 
-export type ReuseMode = 'auto' | 'alwaysNew' | 'alwaysReuse';
+export type ReuseMode = 'auto' | 'libraryOnly' | 'alwaysNew';
 
 export interface ChatMessage {
   role: 'user' | 'assistant';
