@@ -140,7 +140,7 @@ export function ChatPanel({ messages, isLoading, onSendMessage, onConfirm, onRej
                 setEditText('');
               }}
               disabled={isLoading}
-              data-testid="chat-reject-button"
+              data-testid="ui.builder.reject"
             >
               Ablehnen
             </Button>
