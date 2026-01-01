@@ -17,7 +17,7 @@ export function MatchBanner({ candidates, onUseTemplate, onCreateNew }: MatchBan
   }
 
   return (
-    <Card data-testid="match-banner" className="border-blue-200 bg-blue-50/50">
+    <Card data-testid="ui.templates.matchBanner" className="border-blue-200 bg-blue-50/50">
       <CardContent className="py-4">
         <div className="space-y-3" data-testid="match-content">
           <div className="flex items-center justify-between">
@@ -37,7 +37,7 @@ export function MatchBanner({ candidates, onUseTemplate, onCreateNew }: MatchBan
               <div
                 key={candidate.template_id}
                 className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border"
-                data-testid={`match-item-${candidate.template_id}`}
+                data-testid={`ui.templates.candidateItem.${candidate.template_id}`}
               >
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium">{candidate.title}</span>

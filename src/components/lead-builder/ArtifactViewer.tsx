@@ -17,7 +17,7 @@ export function ArtifactViewer({ artifact, isLoading, error, onSaveTemplate }: A
   const isText = artifact?.type === 'call_prompt' || artifact?.type === 'enrichment_prompt';
 
   return (
-    <Card data-testid="artifact-viewer">
+    <Card data-testid="ui.artifact.viewer">
       <CardHeader className="flex flex-row items-center justify-between py-3">
         <CardTitle className="text-sm">Generated Artifact</CardTitle>
         {artifact && (

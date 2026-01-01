@@ -1,13 +1,18 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { Download, Trash2 } from 'lucide-react'
 import { ChatPanel } from '@/components/lead-builder/ChatPanel'
 import { OutputPanel } from '@/components/lead-builder/OutputPanel'
 import { SaveTemplateDialog } from '@/components/lead-builder/SaveTemplateDialog'
 import { DebugPanel } from '@/components/lead-builder/DebugPanel'
+import { Button } from '@/components/ui/button'
+import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { useToast } from '@/components/ui/use-toast'
 import { postDraft, postMatch, postRender, postConfirm, postTemplate } from '@/lib/api'
 import type { ChatMessage, OutputTarget, ReuseMode, Artifact, MatchCandidate } from '@/components/lead-builder/types'
+
+const STORAGE_KEY = 'lead-builder-messages'
 
 export default function LeadBuilderPage() {
   const { toast } = useToast()
@@ -27,6 +32,77 @@ export default function LeadBuilderPage() {
   const [saveDialogLoading, setSaveDialogLoading] = useState(false)
   const [saveDialogError, setSaveDialogError] = useState<string | undefined>(undefined)
 
+  // Load messages from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY)
+      if (saved) {
+        setMessages(JSON.parse(saved))
+      }
+    } catch (e) {
+      console.warn('Failed to load messages from localStorage:', e)
+    }
+  }, [])
+
+  // Save messages to localStorage when they change
+  useEffect(() => {
+    if (messages.length > 0) {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(messages))
+      } catch (e) {
+        console.warn('Failed to save messages to localStorage:', e)
+      }
+    }
+  }, [messages])
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      // Cmd/Ctrl + K = Clear chat
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        clearChat()
+      }
+      // Cmd/Ctrl + S = Export artifact (if exists)
+      if ((e.metaKey || e.ctrlKey) && e.key === 's' && artifact) {
+        e.preventDefault()
+        exportArtifact()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [artifact])
+
+  function clearChat() {
+    setMessages([])
+    setArtifact(null)
+    setMatchCandidates([])
+    setArtifactError(null)
+    localStorage.removeItem(STORAGE_KEY)
+    toast({ title: 'Chat cleared' })
+  }
+
+  function exportArtifact() {
+    if (!artifact) return
+
+    const isText = artifact.type === 'call_prompt' || artifact.type === 'enrichment_prompt'
+    const content = isText ? artifact.content : JSON.stringify(artifact.content, null, 2)
+    const ext = isText ? 'txt' : 'json'
+    const mimeType = isText ? 'text/plain' : 'application/json'
+
+    const blob = new Blob([content], { type: mimeType })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `artifact-${artifact.type}-${Date.now()}.${ext}`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+
+    toast({ title: 'Artifact exported' })
+  }
+
   function addAssistantUnderstanding(understanding: any, draftId: string) {
     setMessages((prev) => [...prev, { role: 'assistant', understanding, draftId }])
   }
@@ -41,11 +117,9 @@ export default function LeadBuilderPage() {
     setMessages((prev) => [...prev, { role: 'user', text: input }])
 
     try {
-      // 1) Draft
       const draftRes = await postDraft({ input_text: input, output_target: outputTarget, reuse_mode: reuseMode })
       addAssistantUnderstanding(draftRes.understanding, draftRes.draft_id)
 
-      // 2) Match (non-blocking)
       try {
         const matchRes = await postMatch({
           input_text: input,
@@ -53,7 +127,6 @@ export default function LeadBuilderPage() {
           top_k: 5,
         })
 
-        // Hash hit => auto render unless alwaysNew
         if (matchRes.hash_hit && reuseMode !== 'alwaysNew') {
           setIsLoadingArtifact(true)
           try {
@@ -164,6 +237,25 @@ export default function LeadBuilderPage() {
 
   return (
     <div className="min-h-screen p-4 md:p-6">
+      {/* Header */}
+      <div className="mx-auto max-w-7xl mb-4 flex items-center justify-between">
+        <h1 className="text-xl font-bold">Lead Builder</h1>
+        <div className="flex items-center gap-2">
+          {artifact && (
+            <Button variant="outline" size="sm" onClick={exportArtifact} data-testid="export-button">
+              <Download className="h-4 w-4 mr-1" />
+              Export
+            </Button>
+          )}
+          <Button variant="ghost" size="sm" onClick={clearChat} data-testid="clear-chat">
+            <Trash2 className="h-4 w-4 mr-1" />
+            Clear
+          </Button>
+          <ThemeToggle />
+        </div>
+      </div>
+
+      {/* Main Content */}
       <div className="mx-auto max-w-7xl grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
         <div>
           <ChatPanel messages={messages} isLoading={isLoadingChat} onSendMessage={onSendMessage} onConfirm={onConfirm} onReject={onReject} />
@@ -197,6 +289,17 @@ export default function LeadBuilderPage() {
             />
           </div>
         </div>
+      </div>
+
+      {/* Keyboard Shortcuts Hint */}
+      <div className="mx-auto max-w-7xl mt-4 text-center text-xs text-muted-foreground">
+        <kbd className="px-1.5 py-0.5 bg-muted rounded">Cmd+K</kbd> Clear chat
+        {artifact && (
+          <>
+            {' | '}
+            <kbd className="px-1.5 py-0.5 bg-muted rounded">Cmd+S</kbd> Export artifact
+          </>
+        )}
       </div>
 
       <SaveTemplateDialog

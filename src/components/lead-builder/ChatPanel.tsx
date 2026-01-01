@@ -40,7 +40,7 @@ export function ChatPanel({ messages, isLoading, onSendMessage, onConfirm, onRej
   return (
     <div
       className="flex flex-col h-full border rounded-lg"
-      data-testid="chat-panel"
+      data-testid="ui.chat.panel"
     >
       <div className="p-4 border-b">
         <h2 className="font-semibold">Lead Builder Chat</h2>
@@ -63,7 +63,7 @@ export function ChatPanel({ messages, isLoading, onSendMessage, onConfirm, onRej
                   {message.text}
                 </div>
               ) : message.understanding ? (
-                <Card className="max-w-[90%]">
+                <Card className="max-w-[90%]" data-testid="ui.builder.understandingCard">
                   <CardContent className="p-4 space-y-3">
                     <div>
                       <Badge variant="outline" className="mb-2">Verständnis</Badge>
@@ -120,7 +120,7 @@ export function ChatPanel({ messages, isLoading, onSendMessage, onConfirm, onRej
             onChange={(e) => setEditText(e.target.value)}
             placeholder="Optional: Korrekturen oder Ergänzungen..."
             className="min-h-[60px] resize-none"
-            data-testid="chat-edit-input"
+            data-testid="ui.builder.editsInput"
           />
           <div className="flex gap-2">
             <Button
@@ -129,7 +129,7 @@ export function ChatPanel({ messages, isLoading, onSendMessage, onConfirm, onRej
                 setEditText('');
               }}
               disabled={isLoading}
-              data-testid="chat-confirm-button"
+              data-testid="ui.builder.confirm"
             >
               Bestätigen
             </Button>
@@ -156,12 +156,12 @@ export function ChatPanel({ messages, isLoading, onSendMessage, onConfirm, onRej
             placeholder="Beschreibe deine Lead-Kriterien..."
             className="min-h-[80px] resize-none"
             disabled={isLoading}
-            data-testid="chat-input"
+            data-testid="ui.chat.input"
           />
           <Button
             type="submit"
             disabled={!input.trim() || isLoading}
-            data-testid="chat-send-button"
+            data-testid="ui.chat.send"
           >
             {isLoading ? 'Verarbeite...' : 'Senden'}
           </Button>
