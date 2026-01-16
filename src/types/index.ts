@@ -1,13 +1,13 @@
-// Output Types
-export type OutputTarget = "lead_campaign_json" | "lead_job_json" | "call_prompt" | "enrichment_prompt"
+// Re-export types from contracts (Single Source of Truth)
+export type {
+  OutputTarget,
+  ReuseMode,
+  Artifact,
+  MatchCandidate,
+  TemplateItem,
+} from "@/lib/contracts"
 
-// Reuse Modes - must match lib/contracts.ts
-export type ReuseMode =
-  | "auto" // Auto-detect (hash hit = reuse, sonst create)
-  | "alwaysNew" // Immer neu erstellen
-  | "libraryOnly" // Immer aus Library
-
-// Chat Message
+// Chat Message (Frontend-specific, not in API contracts)
 export interface ChatMessage {
   role: "user" | "assistant"
   text?: string // Für User-Messages und Error-Messages
@@ -18,30 +18,6 @@ export interface ChatMessage {
     questions: string[]
   }
   draftId?: string // Für Confirm/Reject
-}
-
-// Artifact
-export interface Artifact {
-  type: OutputTarget
-  content: any // JSON object oder string
-}
-
-// Match Candidate
-export interface MatchCandidate {
-  template_id: string
-  type: OutputTarget
-  score: number
-  title: string
-}
-
-// Template Item
-export interface TemplateItem {
-  template_id: string
-  type: OutputTarget
-  title: string
-  tags: string[]
-  usage_count: number
-  last_used_at?: string
 }
 
 // Runtime Config

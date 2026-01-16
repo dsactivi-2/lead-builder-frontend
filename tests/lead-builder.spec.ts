@@ -165,7 +165,7 @@ test.describe("Lead Builder E2E Tests", () => {
     // Save as template
     await expect(page.getByTestId("ui.artifact.viewer")).toBeVisible()
     await page.getByTestId("ui.artifact.saveAsTemplate").click()
-    
+
     // Fill save dialog
     await expect(page.getByTestId("ui.saveTemplate.dialog")).toBeVisible()
     await page.getByTestId("ui.saveTemplate.title").fill("My New Template")

@@ -50,13 +50,13 @@ export function ChatPanel({ messages, isLoading, onSendMessage, onConfirm, onRej
           {messages.map((msg, idx) => (
             <div key={idx}>
               {msg.role === "user" ? (
-                <div className="flex justify-end" data-testid="chat-message-user">
+                <div className="flex justify-end" data-testid="ui.chat.message.user">
                   <div className="max-w-[80%] rounded-lg bg-primary px-4 py-2 text-primary-foreground">
                     <p className="text-sm">{msg.text}</p>
                   </div>
                 </div>
               ) : (
-                <div className="flex justify-start" data-testid="chat-message-assistant">
+                <div className="flex justify-start" data-testid="ui.chat.message.assistant">
                   <div className="max-w-[80%] space-y-3">
                     {msg.understanding && (
                       <Card className="p-4" data-testid="ui.builder.understandingCard">

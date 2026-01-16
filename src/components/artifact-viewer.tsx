@@ -21,7 +21,7 @@ export function ArtifactViewer({ artifact, isLoading, error, onSaveTemplate }: A
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
           <CardTitle className="text-base font-semibold">Generated Artifact</CardTitle>
           {canSave && (
-            <Button variant="outline" size="sm" onClick={onSaveTemplate} data-testid="artifact-save-button">
+            <Button variant="outline" size="sm" onClick={onSaveTemplate} data-testid="ui.artifact.saveAsTemplate">
               <FileText className="mr-2 h-4 w-4" />
               Save as Template
             </Button>
@@ -29,7 +29,7 @@ export function ArtifactViewer({ artifact, isLoading, error, onSaveTemplate }: A
         </CardHeader>
         <CardContent>
           {isLoading && (
-            <div className="flex flex-col items-center justify-center py-12" data-testid="artifact-loading">
+            <div className="flex flex-col items-center justify-center py-12" data-testid="ui.artifact.loading">
               <Loader2 className="mb-4 h-8 w-8 animate-spin text-muted-foreground" />
               <p className="text-sm text-muted-foreground">Generating artifact...</p>
             </div>
@@ -38,7 +38,7 @@ export function ArtifactViewer({ artifact, isLoading, error, onSaveTemplate }: A
           {error && (
             <div
               className="flex flex-col items-center justify-center rounded-lg border border-destructive bg-destructive/10 py-12"
-              data-testid="artifact-error"
+              data-testid="ui.artifact.error"
             >
               <AlertCircle className="mb-4 h-8 w-8 text-destructive" />
               <p className="text-sm text-destructive">{error}</p>
@@ -48,7 +48,7 @@ export function ArtifactViewer({ artifact, isLoading, error, onSaveTemplate }: A
           {!isLoading && !error && !artifact && (
             <div
               className="flex flex-col items-center justify-center rounded-lg border border-dashed py-12"
-              data-testid="artifact-empty"
+              data-testid="ui.artifact.empty"
             >
               <FileText className="mb-4 h-8 w-8 text-muted-foreground" />
               <p className="text-sm text-muted-foreground">No artifact generated yet</p>
@@ -60,7 +60,7 @@ export function ArtifactViewer({ artifact, isLoading, error, onSaveTemplate }: A
               <Badge variant="secondary">{artifact.type}</Badge>
               <pre
                 className="max-h-[500px] overflow-auto rounded-lg bg-muted p-4 text-xs"
-                data-testid="artifact-content"
+                data-testid="ui.artifact.content"
               >
                 <code>
                   {typeof artifact.content === "string" ? artifact.content : JSON.stringify(artifact.content, null, 2)}

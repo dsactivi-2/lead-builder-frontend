@@ -468,3 +468,260 @@ export type ScheduledTask = z.infer<typeof ScheduledTaskSchema>
 export type ScheduledTasksResponse = z.infer<typeof ScheduledTasksResponseSchema>
 
 export type DashboardStats = z.infer<typeof DashboardStatsSchema>
+
+// ============================================================================
+// VERMIETER (Landlords) - ATU Relocation
+// ============================================================================
+
+export const VermieterStatusSchema = z.enum(["active", "inactive", "blacklisted"])
+
+export const VermieterSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  company: z.string().nullable().optional(),
+  phone: z.string().nullable().optional(),
+  email: z.string().nullable().optional(),
+  address: z.string().nullable().optional(),
+  city: z.string().nullable().optional(),
+  postal_code: z.string().nullable().optional(),
+  status: VermieterStatusSchema,
+  languages: z.array(z.string()).or(z.string()).optional(),
+  notes: z.string().nullable().optional(),
+  total_deals: z.number().optional(),
+  response_rate: z.number().optional(),
+  last_contacted_at: z.string().nullable().optional(),
+  last_deal_at: z.string().nullable().optional(),
+  created_at: z.string(),
+  updated_at: z.string().optional(),
+})
+
+export const VermieterResponseSchema = z.object({
+  items: z.array(VermieterSchema),
+})
+
+// ============================================================================
+// HOUSING (Monteurzimmer/Apartments) - ATU Relocation
+// ============================================================================
+
+export const HousingTypeSchema = z.enum(["monteurzimmer", "apartment", "wg", "house"])
+export const HousingStatusSchema = z.enum(["active", "reserved", "rented", "inactive"])
+
+export const HousingSchema = z.object({
+  id: z.string(),
+  vermieter_id: z.string(),
+  title: z.string(),
+  type: HousingTypeSchema,
+  address: z.string().nullable().optional(),
+  city: z.string(),
+  postal_code: z.string().nullable().optional(),
+  district: z.string().nullable().optional(),
+  size_sqm: z.number().nullable().optional(),
+  rooms: z.number().nullable().optional(),
+  max_persons: z.number().nullable().optional(),
+  price_monthly: z.number(),
+  deposit: z.number().nullable().optional(),
+  utilities_included: z.union([z.number(), z.boolean()]).optional(),
+  available_from: z.string().nullable().optional(),
+  min_stay_days: z.number().nullable().optional(),
+  amenities: z.array(z.string()).or(z.string()).optional(),
+  mietvertrag_possible: z.union([z.number(), z.boolean()]).optional(),
+  anmeldung_possible: z.union([z.number(), z.boolean()]).optional(),
+  status: HousingStatusSchema,
+  is_available: z.union([z.number(), z.boolean()]).optional(),
+  images: z.array(z.string()).optional(),
+  notes: z.string().nullable().optional(),
+  created_at: z.string(),
+  updated_at: z.string().optional(),
+  // Joined fields
+  vermieter_name: z.string().optional(),
+  vermieter_phone: z.string().optional(),
+  score: z.number().optional(),
+})
+
+export const HousingResponseSchema = z.object({
+  items: z.array(HousingSchema),
+})
+
+// ============================================================================
+// CANDIDATES (Relocation Candidates) - ATU Relocation
+// ============================================================================
+
+export const CandidateStatusSchema = z.enum(["new", "searching", "found", "moved_in", "cancelled"])
+
+export const CandidateSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  email: z.string().nullable().optional(),
+  phone: z.string().nullable().optional(),
+  nationality: z.string().nullable().optional(),
+  employer: z.string().nullable().optional(),
+  position: z.string().nullable().optional(),
+  work_start_date: z.string().nullable().optional(),
+  preferred_city: z.string().nullable().optional(),
+  budget_max: z.number().nullable().optional(),
+  family_size: z.number().nullable().optional(),
+  needs_mietvertrag: z.union([z.number(), z.boolean()]).optional(),
+  needs_anmeldung: z.union([z.number(), z.boolean()]).optional(),
+  status: CandidateStatusSchema,
+  assigned_housing_id: z.string().nullable().optional(),
+  notes: z.string().nullable().optional(),
+  created_at: z.string(),
+  updated_at: z.string().optional(),
+})
+
+export const CandidateResponseSchema = z.object({
+  items: z.array(CandidateSchema),
+})
+
+// ============================================================================
+// RELOCATION REQUESTS - ATU Relocation
+// ============================================================================
+
+export const RelocationStatusSchema = z.enum(["pending", "searching", "negotiating", "found", "completed", "cancelled"])
+
+export const RelocationRequestSchema = z.object({
+  id: z.string(),
+  candidate_id: z.string(),
+  requirements: z.record(z.unknown()).optional(),
+  matched_housing: z.array(z.string()).or(z.string()).optional(),
+  status: RelocationStatusSchema,
+  assigned_agent: z.string().nullable().optional(),
+  started_at: z.string().nullable().optional(),
+  completed_at: z.string().nullable().optional(),
+  notes: z.string().nullable().optional(),
+  created_at: z.string(),
+  updated_at: z.string().optional(),
+})
+
+export const RelocationResponseSchema = z.object({
+  items: z.array(RelocationRequestSchema),
+})
+
+// ============================================================================
+// NEGOTIATIONS - ATU Relocation
+// ============================================================================
+
+export const NegotiationStatusSchema = z.enum(["pending", "in_progress", "accepted", "rejected", "cancelled"])
+
+export const NegotiationSchema = z.object({
+  id: z.string(),
+  relocation_request_id: z.string().nullable().optional(),
+  candidate_id: z.string(),
+  vermieter_id: z.string(),
+  housing_id: z.string(),
+  offered_price: z.number().nullable().optional(),
+  final_price: z.number().nullable().optional(),
+  move_in_date: z.string().nullable().optional(),
+  status: NegotiationStatusSchema,
+  call_attempts: z.number().optional(),
+  call_transcript: z.array(z.record(z.unknown())).or(z.string()).optional(),
+  notes: z.string().nullable().optional(),
+  created_at: z.string(),
+  updated_at: z.string().optional(),
+  // Joined fields
+  candidate_name: z.string().optional(),
+  vermieter_name: z.string().optional(),
+  vermieter_phone: z.string().optional(),
+  housing_title: z.string().optional(),
+  housing_address: z.string().optional(),
+})
+
+export const NegotiationResponseSchema = z.object({
+  items: z.array(NegotiationSchema),
+})
+
+// ============================================================================
+// DEALS - ATU Relocation
+// ============================================================================
+
+export const DealStatusSchema = z.enum(["pending", "active", "completed", "cancelled"])
+
+export const DealSchema = z.object({
+  id: z.string(),
+  negotiation_id: z.string(),
+  candidate_id: z.string(),
+  vermieter_id: z.string(),
+  housing_id: z.string(),
+  monthly_rent: z.number(),
+  deposit_amount: z.number().nullable().optional(),
+  move_in_date: z.string().nullable().optional(),
+  contract_start: z.string().nullable().optional(),
+  contract_end: z.string().nullable().optional(),
+  status: DealStatusSchema,
+  contract_signed: z.union([z.number(), z.boolean()]).optional(),
+  deposit_paid: z.union([z.number(), z.boolean()]).optional(),
+  keys_handed_over: z.union([z.number(), z.boolean()]).optional(),
+  anmeldung_done: z.union([z.number(), z.boolean()]).optional(),
+  signed_at: z.string().nullable().optional(),
+  moved_in_at: z.string().nullable().optional(),
+  notes: z.string().nullable().optional(),
+  created_at: z.string(),
+  updated_at: z.string().optional(),
+  // Joined fields
+  candidate_name: z.string().optional(),
+  vermieter_name: z.string().optional(),
+  housing_title: z.string().optional(),
+  address: z.string().optional(),
+})
+
+export const DealResponseSchema = z.object({
+  items: z.array(DealSchema),
+})
+
+// ============================================================================
+// AGENT RESPONSES
+// ============================================================================
+
+export const HousingSearchResultSchema = z.object({
+  success: z.boolean(),
+  relocation_request_id: z.string().optional(),
+  matched_count: z.number(),
+  matched_housing: z.array(HousingSchema),
+  negotiations: z.array(z.object({
+    id: z.string(),
+    housing: HousingSchema,
+  })).optional(),
+  next_step: z.string().optional(),
+})
+
+export const TriggerCallResultSchema = z.object({
+  success: z.boolean(),
+  negotiation_id: z.string(),
+  message: z.string(),
+  agent_response: z.record(z.unknown()).optional(),
+  call_details: z.object({
+    vermieter: z.string(),
+    phone: z.string(),
+    candidate: z.string(),
+    housing: z.string().optional(),
+  }).optional(),
+})
+
+// Type exports for ATU Relocation
+export type VermieterStatus = z.infer<typeof VermieterStatusSchema>
+export type Vermieter = z.infer<typeof VermieterSchema>
+export type VermieterResponse = z.infer<typeof VermieterResponseSchema>
+
+export type HousingType = z.infer<typeof HousingTypeSchema>
+export type HousingStatus = z.infer<typeof HousingStatusSchema>
+export type Housing = z.infer<typeof HousingSchema>
+export type HousingResponse = z.infer<typeof HousingResponseSchema>
+
+export type CandidateStatus = z.infer<typeof CandidateStatusSchema>
+export type Candidate = z.infer<typeof CandidateSchema>
+export type CandidateResponse = z.infer<typeof CandidateResponseSchema>
+
+export type RelocationStatus = z.infer<typeof RelocationStatusSchema>
+export type RelocationRequest = z.infer<typeof RelocationRequestSchema>
+export type RelocationResponse = z.infer<typeof RelocationResponseSchema>
+
+export type NegotiationStatus = z.infer<typeof NegotiationStatusSchema>
+export type Negotiation = z.infer<typeof NegotiationSchema>
+export type NegotiationResponse = z.infer<typeof NegotiationResponseSchema>
+
+export type DealStatus = z.infer<typeof DealStatusSchema>
+export type Deal = z.infer<typeof DealSchema>
+export type DealResponse = z.infer<typeof DealResponseSchema>
+
+export type HousingSearchResult = z.infer<typeof HousingSearchResultSchema>
+export type TriggerCallResult = z.infer<typeof TriggerCallResultSchema>

@@ -27,6 +27,21 @@ import {
   ScheduledTasksResponseSchema,
   ScheduledTaskSchema,
   DashboardStatsSchema,
+  // ATU Relocation Schemas
+  VermieterResponseSchema,
+  VermieterSchema,
+  HousingResponseSchema,
+  HousingSchema,
+  CandidateResponseSchema,
+  CandidateSchema,
+  RelocationResponseSchema,
+  RelocationRequestSchema,
+  NegotiationResponseSchema,
+  NegotiationSchema,
+  DealResponseSchema,
+  DealSchema,
+  HousingSearchResultSchema,
+  TriggerCallResultSchema,
   type OutputTarget,
   type ReuseMode,
   type DraftResponse,
@@ -67,6 +82,27 @@ import {
   type ScheduledTask,
   type TaskType,
   type DashboardStats,
+  // ATU Relocation Types
+  type VermieterResponse,
+  type Vermieter,
+  type VermieterStatus,
+  type HousingResponse,
+  type Housing,
+  type HousingType,
+  type CandidateResponse,
+  type Candidate,
+  type CandidateStatus,
+  type RelocationResponse,
+  type RelocationRequest,
+  type RelocationStatus,
+  type NegotiationResponse,
+  type Negotiation,
+  type NegotiationStatus,
+  type DealResponse,
+  type Deal,
+  type DealStatus,
+  type HousingSearchResult,
+  type TriggerCallResult,
 } from "./contracts"
 import { classifyError, type ApiError } from "./errors"
 
@@ -799,4 +835,295 @@ export async function createScheduledTask(data: {
 export async function getDashboardStats(): Promise<DashboardStats> {
   const url = `${RUNTIME.apiBaseUrl}/v1/dashboard/stats`
   return fetchWithValidation(url, { method: "GET" }, DashboardStatsSchema)
+}
+
+// ============================================================================
+// VERMIETER API (ATU Relocation)
+// ============================================================================
+
+// GET /v1/vermieter
+export async function getVermieter(filters?: {
+  status?: VermieterStatus
+  city?: string
+}): Promise<VermieterResponse> {
+  const params = new URLSearchParams()
+  if (filters?.status) params.append("status", filters.status)
+  if (filters?.city) params.append("city", filters.city)
+
+  const url = `${RUNTIME.apiBaseUrl}/v1/vermieter${params.toString() ? `?${params}` : ""}`
+  return fetchWithValidation(url, { method: "GET" }, VermieterResponseSchema)
+}
+
+// POST /v1/vermieter
+export async function createVermieter(data: {
+  name: string
+  company?: string
+  phone?: string
+  email?: string
+  address?: string
+  city?: string
+  postal_code?: string
+  languages?: string[]
+  notes?: string
+}): Promise<Vermieter> {
+  const url = `${RUNTIME.apiBaseUrl}/v1/vermieter`
+  return fetchWithValidation(
+    url,
+    { method: "POST", body: JSON.stringify(data) },
+    VermieterSchema,
+  )
+}
+
+// GET /v1/vermieter/:id
+export async function getVermieterById(id: string): Promise<Vermieter> {
+  const url = `${RUNTIME.apiBaseUrl}/v1/vermieter/${id}`
+  return fetchWithValidation(url, { method: "GET" }, VermieterSchema)
+}
+
+// ============================================================================
+// HOUSING API (ATU Relocation)
+// ============================================================================
+
+// GET /v1/housing
+export async function getHousing(filters?: {
+  city?: string
+  type?: HousingType
+  available?: boolean
+  price_max?: number
+  vermieter_id?: string
+}): Promise<HousingResponse> {
+  const params = new URLSearchParams()
+  if (filters?.city) params.append("city", filters.city)
+  if (filters?.type) params.append("type", filters.type)
+  if (filters?.available !== undefined) params.append("available", String(filters.available))
+  if (filters?.price_max) params.append("price_max", filters.price_max.toString())
+  if (filters?.vermieter_id) params.append("vermieter_id", filters.vermieter_id)
+
+  const url = `${RUNTIME.apiBaseUrl}/v1/housing${params.toString() ? `?${params}` : ""}`
+  return fetchWithValidation(url, { method: "GET" }, HousingResponseSchema)
+}
+
+// POST /v1/housing
+export async function createHousing(data: {
+  vermieter_id: string
+  title: string
+  type: HousingType
+  city: string
+  address?: string
+  postal_code?: string
+  district?: string
+  size_sqm?: number
+  rooms?: number
+  max_persons?: number
+  price_monthly: number
+  deposit?: number
+  utilities_included?: boolean
+  available_from?: string
+  min_stay_days?: number
+  amenities?: string[]
+  mietvertrag_possible?: boolean
+  anmeldung_possible?: boolean
+  notes?: string
+}): Promise<Housing> {
+  const url = `${RUNTIME.apiBaseUrl}/v1/housing`
+  return fetchWithValidation(
+    url,
+    { method: "POST", body: JSON.stringify(data) },
+    HousingSchema,
+  )
+}
+
+// ============================================================================
+// CANDIDATES API (ATU Relocation)
+// ============================================================================
+
+// GET /v1/candidates
+export async function getCandidates(filters?: {
+  status?: CandidateStatus
+  city?: string
+}): Promise<CandidateResponse> {
+  const params = new URLSearchParams()
+  if (filters?.status) params.append("status", filters.status)
+  if (filters?.city) params.append("city", filters.city)
+
+  const url = `${RUNTIME.apiBaseUrl}/v1/candidates${params.toString() ? `?${params}` : ""}`
+  return fetchWithValidation(url, { method: "GET" }, CandidateResponseSchema)
+}
+
+// POST /v1/candidates
+export async function createCandidate(data: {
+  name: string
+  email?: string
+  phone?: string
+  nationality?: string
+  employer?: string
+  position?: string
+  work_start_date?: string
+  preferred_city?: string
+  budget_max?: number
+  family_size?: number
+  needs_mietvertrag?: boolean
+  needs_anmeldung?: boolean
+  notes?: string
+}): Promise<Candidate> {
+  const url = `${RUNTIME.apiBaseUrl}/v1/candidates`
+  return fetchWithValidation(
+    url,
+    { method: "POST", body: JSON.stringify(data) },
+    CandidateSchema,
+  )
+}
+
+// GET /v1/candidates/:id
+export async function getCandidateById(id: string): Promise<Candidate> {
+  const url = `${RUNTIME.apiBaseUrl}/v1/candidates/${id}`
+  return fetchWithValidation(url, { method: "GET" }, CandidateSchema)
+}
+
+// ============================================================================
+// RELOCATION API (ATU Relocation)
+// ============================================================================
+
+// GET /v1/relocation
+export async function getRelocationRequests(filters?: {
+  status?: RelocationStatus
+  candidate_id?: string
+}): Promise<RelocationResponse> {
+  const params = new URLSearchParams()
+  if (filters?.status) params.append("status", filters.status)
+  if (filters?.candidate_id) params.append("candidate_id", filters.candidate_id)
+
+  const url = `${RUNTIME.apiBaseUrl}/v1/relocation${params.toString() ? `?${params}` : ""}`
+  return fetchWithValidation(url, { method: "GET" }, RelocationResponseSchema)
+}
+
+// POST /v1/relocation
+export async function createRelocationRequest(data: {
+  candidate_id: string
+  requirements?: Record<string, unknown>
+  notes?: string
+}): Promise<RelocationRequest> {
+  const url = `${RUNTIME.apiBaseUrl}/v1/relocation`
+  return fetchWithValidation(
+    url,
+    { method: "POST", body: JSON.stringify(data) },
+    RelocationRequestSchema,
+  )
+}
+
+// ============================================================================
+// NEGOTIATIONS API (ATU Relocation)
+// ============================================================================
+
+// GET /v1/negotiations
+export async function getNegotiations(filters?: {
+  status?: NegotiationStatus
+  candidate_id?: string
+  vermieter_id?: string
+}): Promise<NegotiationResponse> {
+  const params = new URLSearchParams()
+  if (filters?.status) params.append("status", filters.status)
+  if (filters?.candidate_id) params.append("candidate_id", filters.candidate_id)
+  if (filters?.vermieter_id) params.append("vermieter_id", filters.vermieter_id)
+
+  const url = `${RUNTIME.apiBaseUrl}/v1/negotiations${params.toString() ? `?${params}` : ""}`
+  return fetchWithValidation(url, { method: "GET" }, NegotiationResponseSchema)
+}
+
+// POST /v1/negotiations
+export async function createNegotiation(data: {
+  candidate_id: string
+  vermieter_id: string
+  housing_id: string
+  relocation_request_id?: string
+  offered_price?: number
+  notes?: string
+}): Promise<Negotiation> {
+  const url = `${RUNTIME.apiBaseUrl}/v1/negotiations`
+  return fetchWithValidation(
+    url,
+    { method: "POST", body: JSON.stringify(data) },
+    NegotiationSchema,
+  )
+}
+
+// PATCH /v1/negotiations/:id
+export async function updateNegotiation(id: string, data: {
+  status?: NegotiationStatus
+  final_price?: number
+  move_in_date?: string
+  notes?: string
+}): Promise<Negotiation> {
+  const url = `${RUNTIME.apiBaseUrl}/v1/negotiations/${id}`
+  return fetchWithValidation(
+    url,
+    { method: "PATCH", body: JSON.stringify(data) },
+    NegotiationSchema,
+  )
+}
+
+// ============================================================================
+// DEALS API (ATU Relocation)
+// ============================================================================
+
+// GET /v1/deals
+export async function getDeals(filters?: {
+  status?: DealStatus
+  candidate_id?: string
+}): Promise<DealResponse> {
+  const params = new URLSearchParams()
+  if (filters?.status) params.append("status", filters.status)
+  if (filters?.candidate_id) params.append("candidate_id", filters.candidate_id)
+
+  const url = `${RUNTIME.apiBaseUrl}/v1/deals${params.toString() ? `?${params}` : ""}`
+  return fetchWithValidation(url, { method: "GET" }, DealResponseSchema)
+}
+
+// PATCH /v1/deals/:id
+export async function updateDeal(id: string, data: {
+  status?: DealStatus
+  contract_signed?: boolean
+  deposit_paid?: boolean
+  keys_handed_over?: boolean
+  anmeldung_done?: boolean
+  notes?: string
+}): Promise<Deal> {
+  const url = `${RUNTIME.apiBaseUrl}/v1/deals/${id}`
+  return fetchWithValidation(
+    url,
+    { method: "PATCH", body: JSON.stringify(data) },
+    DealSchema,
+  )
+}
+
+// ============================================================================
+// AGENT INTEGRATION API (ATU Relocation)
+// ============================================================================
+
+// POST /v1/agents/search-housing
+export async function searchHousingForCandidate(data: {
+  candidate_id: string
+  auto_negotiate?: boolean
+}): Promise<HousingSearchResult> {
+  const url = `${RUNTIME.apiBaseUrl}/v1/agents/search-housing`
+  return fetchWithValidation(
+    url,
+    { method: "POST", body: JSON.stringify(data) },
+    HousingSearchResultSchema,
+  )
+}
+
+// POST /v1/agents/trigger-call
+export async function triggerVermieterCall(data: {
+  negotiation_id: string
+  candidate_id: string
+  vermieter_id: string
+  housing_id: string
+}): Promise<TriggerCallResult> {
+  const url = `${RUNTIME.apiBaseUrl}/v1/agents/trigger-call`
+  return fetchWithValidation(
+    url,
+    { method: "POST", body: JSON.stringify(data) },
+    TriggerCallResultSchema,
+  )
 }

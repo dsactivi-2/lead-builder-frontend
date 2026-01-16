@@ -67,7 +67,7 @@ export function SaveTemplateDialog({ open, onOpenChange, onSave, loading = false
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent onKeyDown={handleKeyDown}>
+      <DialogContent data-testid="ui.saveTemplate.dialog" onKeyDown={handleKeyDown}>
         <DialogHeader>
           <DialogTitle>Save as Template</DialogTitle>
         </DialogHeader>
@@ -80,7 +80,7 @@ export function SaveTemplateDialog({ open, onOpenChange, onSave, loading = false
               placeholder="e.g. SHK Westbalkan DE"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              data-testid="ui.templateSave.title"
+              data-testid="ui.saveTemplate.title"
             />
           </div>
 
@@ -91,7 +91,7 @@ export function SaveTemplateDialog({ open, onOpenChange, onSave, loading = false
               placeholder="e.g. SHK, DE, Westbalkan"
               value={tagsInput}
               onChange={(e) => setTagsInput(e.target.value)}
-              data-testid="ui.templateSave.tags"
+              data-testid="ui.saveTemplate.tags"
             />
             {parsedTags.length > 0 && (
               <div className="flex flex-wrap gap-1 pt-1">
@@ -119,11 +119,11 @@ export function SaveTemplateDialog({ open, onOpenChange, onSave, loading = false
             variant="outline"
             onClick={() => onOpenChange(false)}
             disabled={isSubmitting}
-            data-testid="ui.templateSave.cancel"
+            data-testid="ui.saveTemplate.cancel"
           >
             Cancel
           </Button>
-          <Button onClick={handleSave} disabled={isSubmitting || !title.trim()} data-testid="ui.templateSave.save">
+          <Button onClick={handleSave} disabled={isSubmitting || !title.trim()} data-testid="ui.saveTemplate.save">
             {isSubmitting ? "Saving..." : "Save"}
           </Button>
         </DialogFooter>

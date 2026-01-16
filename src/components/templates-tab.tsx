@@ -36,7 +36,7 @@ export function TemplatesTab({ onUseTemplate }: TemplatesTabProps) {
 
   if (isLoading) {
     return (
-      <Card className="h-full" data-testid="templates-tab">
+      <Card className="h-full" data-testid="ui.templates.tab">
         <div className="flex h-full items-center justify-center p-8">
           <div className="flex flex-col items-center gap-3">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -49,7 +49,7 @@ export function TemplatesTab({ onUseTemplate }: TemplatesTabProps) {
 
   if (error) {
     return (
-      <Card className="h-full" data-testid="templates-tab">
+      <Card className="h-full" data-testid="ui.templates.tab">
         <div className="flex h-full items-center justify-center p-8">
           <div className="flex flex-col items-center gap-3">
             <AlertCircle className="h-8 w-8 text-destructive" />
@@ -62,8 +62,8 @@ export function TemplatesTab({ onUseTemplate }: TemplatesTabProps) {
 
   if (templates.length === 0) {
     return (
-      <Card className="h-full" data-testid="templates-tab">
-        <div className="flex h-full items-center justify-center p-8" data-testid="templates-empty">
+      <Card className="h-full" data-testid="ui.templates.tab">
+        <div className="flex h-full items-center justify-center p-8" data-testid="ui.templates.empty">
           <div className="flex flex-col items-center gap-3">
             <FileText className="h-8 w-8 text-muted-foreground" />
             <p className="text-sm text-muted-foreground">No saved templates yet.</p>
@@ -74,14 +74,14 @@ export function TemplatesTab({ onUseTemplate }: TemplatesTabProps) {
   }
 
   return (
-    <Card className="h-full" data-testid="templates-tab">
+    <Card className="h-full" data-testid="ui.templates.tab">
       <ScrollArea className="h-full p-4">
-        <div className="space-y-2" data-testid="templates-list">
+        <div className="space-y-2" data-testid="ui.templates.list">
           {templates.map((template) => (
             <div
               key={template.template_id}
               className="flex items-start justify-between rounded-lg border bg-card p-3"
-              data-testid={`template-item-${template.template_id}`}
+              data-testid={`ui.templates.item.${template.template_id}`}
             >
               <div className="flex-1 space-y-2">
                 <div className="flex items-start justify-between">
@@ -90,7 +90,7 @@ export function TemplatesTab({ onUseTemplate }: TemplatesTabProps) {
                     size="sm"
                     variant="outline"
                     onClick={() => onUseTemplate(template.template_id, template.type)}
-                    data-testid={`template-load-${template.template_id}`}
+                    data-testid={`ui.templates.load.${template.template_id}`}
                   >
                     Use
                   </Button>

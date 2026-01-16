@@ -24,7 +24,7 @@ export function MatchBanner({ candidates, onUseTemplate, onCreateNew }: MatchBan
             <Badge variant="secondary">{candidates.length} Similar Templates</Badge>
             <span className="text-sm text-muted-foreground">found</span>
           </div>
-          <Button variant="ghost" size="sm" onClick={onCreateNew} data-testid="match-create-new">
+          <Button variant="ghost" size="sm" onClick={onCreateNew} data-testid="ui.templates.createNew">
             Create New Instead
           </Button>
         </div>
@@ -54,7 +54,7 @@ export function MatchBanner({ candidates, onUseTemplate, onCreateNew }: MatchBan
                 <Button
                   size="sm"
                   onClick={() => onUseTemplate(candidate.template_id, candidate.type)}
-                  data-testid={`match-use-${candidate.template_id}`}
+                  data-testid={`ui.templates.use.${candidate.template_id}`}
                 >
                   Use This
                 </Button>
